@@ -1602,6 +1602,9 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					// because opening an issue is what asks for it; executable
 					// bytes stay off the authenticated app/API origin.
 					r.Get("/plugins/{installationId}/surfaces/{surfaceKey}/launch", h.GetPluginSurfaceLaunch)
+					// KB-HOOK: workspace knowledge base read API.
+					r.Get("/knowledge/tree", h.GetKnowledgeTree)
+					r.Get("/knowledge/file", h.GetKnowledgeFile)
 				})
 				// Admin-level access
 				r.Group(func(r chi.Router) {

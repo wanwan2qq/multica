@@ -416,6 +416,11 @@ import {
   EMPTY_SKILL,
   SkillImportResultSchema,
   EMPTY_SKILL_IMPORT_RESULT,
+  // KB-HOOK: workspace knowledge base schemas
+  KnowledgeTreeResponseSchema,
+  KnowledgeFileResponseSchema,
+  EMPTY_KNOWLEDGE_TREE,
+  EMPTY_KNOWLEDGE_FILE,
   IssueViewSchema,
   IssueViewListSchema,
   IssueViewPreferenceSchema,
@@ -450,6 +455,7 @@ import {
   type IssueViewPreference,
   type CreateIssueViewRequest,
 } from "./schemas";
+import type { KnowledgeFileResponse, KnowledgeTreeResponse } from "../knowledge";
 
 /** Identifies the calling client to the server.
  *  Sent on every HTTP request as X-Client-Platform / X-Client-Version /
@@ -2547,6 +2553,22 @@ export class ApiClient {
 
   async getWorkspace(id: string): Promise<Workspace> {
     return this.fetch(`/api/workspaces/${id}`);
+  }
+
+  async getKnowledgeTree(workspaceId: string): Promise<KnowledgeTreeResponse> {
+    const raw = await this.fetch<unknown>(`/api/workspaces/${workspaceId}/knowledge/tree`);
+    return parseWithFallback(raw, KnowledgeTreeResponseSchema, EMPTY_KNOWLEDGE_TREE, {
+      endpoint: "GET /api/workspaces/{id}/knowledge/tree",
+    });
+  }
+
+  async getKnowledgeFile(workspaceId: string, path: string): Promise<KnowledgeFileResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/knowledge/file?path=${encodeURIComponent(path)}`,
+    );
+    return parseWithFallback(raw, KnowledgeFileResponseSchema, EMPTY_KNOWLEDGE_FILE, {
+      endpoint: "GET /api/workspaces/{id}/knowledge/file",
+    });
   }
 
   async createWorkspace(data: { name: string; slug: string; description?: string; context?: string; issue_prefix?: string }): Promise<Workspace> {
