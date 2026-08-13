@@ -1319,6 +1319,8 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Get("/plugins/private/{pluginRef}", h.GetPrivatePluginStatus)
 					r.Get("/plugins/catalog", h.ListPluginCatalog)
 					r.Get("/plugins/catalog/{pluginKey}", h.GetPluginCatalogRelease)
+					r.Get("/knowledge/tree", h.GetKnowledgeTree)
+					r.Get("/knowledge/file", h.GetKnowledgeFile)
 				})
 				// Admin-level access
 				r.Group(func(r chi.Router) {

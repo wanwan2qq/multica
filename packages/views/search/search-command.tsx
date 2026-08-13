@@ -83,6 +83,7 @@ type NavKey =
   | "agents"
   | "runtimes"
   | "skills"
+  | "knowledge"
   | "settings";
 
 // No `icon` field: like the sidebar nav, a page's icon is derived from its
@@ -250,6 +251,7 @@ export function SearchCommand() {
     { key: "agents", label: t(($) => $.pages.agents), keywords: ["agents", "bots", "ai"] },
     { key: "runtimes", label: t(($) => $.pages.runtimes), keywords: ["runtimes", "environments"] },
     { key: "skills", label: t(($) => $.pages.skills), keywords: ["skills", "library"] },
+    { key: "knowledge", label: t(($) => $.pages.knowledge), keywords: ["knowledge", "docs", "wiki", "知识库"] },
     { key: "settings", label: t(($) => $.pages.settings), keywords: ["settings", "config", "preferences", "设置"] },
   ];
   const { pathname, getShareableUrl } = useNavigation();

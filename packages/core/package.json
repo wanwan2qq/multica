@@ -83,6 +83,8 @@
     "./plugins": "./plugins/index.ts",
     "./plugins/queries": "./plugins/queries.ts",
     "./plugins/mutations": "./plugins/mutations.ts",
+    "./knowledge": "./knowledge/index.ts",
+    "./knowledge/queries": "./knowledge/queries.ts",
     "./labels": "./labels/index.ts",
     "./labels/queries": "./labels/queries.ts",
     "./labels/mutations": "./labels/mutations.ts",

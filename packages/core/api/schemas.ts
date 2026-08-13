@@ -77,6 +77,7 @@ import type {
   WebhookDelivery,
   WorkspaceMcpServer,
 } from "../types";
+import type { KnowledgeFileResponse, KnowledgeTreeResponse } from "../knowledge";
 import type { CloudRuntimeNode } from "../runtimes/cloud-runtime";
 import type { CreateFeedbackResponse } from "../feedback/types";
 
@@ -2790,4 +2791,49 @@ export const EMPTY_JOIN_SHARE_LINK_RESPONSE: {
   },
   workspace_id: "",
   workspace_slug: "",
+};
+
+// KB-HOOK: workspace knowledge base schemas (read-only Git remote browser)
+export const KnowledgeTreeEntrySchema = z.object({
+  path: z.string(),
+  type: z.enum(["blob", "tree"]).or(z.string()),
+  size: z.number().optional(),
+}).loose();
+
+export const KnowledgeTreeResponseSchema = z.object({
+  repo_url: z.string(),
+  description: z.string().optional().default(""),
+  ref: z.string().optional().default(""),
+  browse_url: z.string().optional().default(""),
+  provider: z.string().optional().default("github"),
+  entries: z.array(KnowledgeTreeEntrySchema).default([]),
+}).loose();
+
+export const EMPTY_KNOWLEDGE_TREE: KnowledgeTreeResponse = {
+  repo_url: "",
+  description: "",
+  ref: "",
+  browse_url: "",
+  provider: "github",
+  entries: [],
+};
+
+export const KnowledgeFileResponseSchema = z.object({
+  path: z.string(),
+  ref: z.string().optional().default(""),
+  browse_url: z.string().optional().default(""),
+  media: z.string().optional().default("text"),
+  truncated: z.boolean().optional().default(false),
+  size: z.number().optional().default(0),
+  content: z.string().optional().default(""),
+}).loose();
+
+export const EMPTY_KNOWLEDGE_FILE: KnowledgeFileResponse = {
+  path: "",
+  ref: "",
+  browse_url: "",
+  media: "text",
+  truncated: false,
+  size: 0,
+  content: "",
 };

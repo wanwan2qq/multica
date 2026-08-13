@@ -19,6 +19,7 @@
     "agents": "智能体",
     "runtimes": "运行时",
     "skills": "Skills",
+    "knowledge": "知识库",
     "settings": "设置"
   },
   "commands": {

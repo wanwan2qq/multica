@@ -19,6 +19,7 @@
     "agents": "エージェント",
     "runtimes": "ランタイム",
     "skills": "スキル",
+    "knowledge": "ナレッジ",
     "settings": "設定"
   },
   "commands": {
