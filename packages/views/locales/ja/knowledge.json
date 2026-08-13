@@ -1,0 +1,19 @@
+{
+  "page": {
+    "title": "ナレッジ",
+    "open_in_git": "Git で開く",
+    "tree_aria": "ナレッジファイル",
+    "truncated": "プレビュー上限を超えています。続きは Git で開いてください。"
+  },
+  "empty": {
+    "not_configured_title": "ナレッジリポジトリが未設定です",
+    "not_configured_description": "設定 → リポジトリに Git URL を追加し、説明に「知識庫」または knowledge を入れてください。全員が見るのはリモートのデフォルトブランチです。",
+    "open_repositories": "リポジトリを開く",
+    "no_file_title": "ファイルを選択",
+    "no_file_description": "ツリーから Markdown を選ぶとプレビューできます。編集は Git 側で行います。",
+    "binary_title": "このファイルはプレビューできません",
+    "binary_description": "バイナリはここでは表示しません。Git で開いてください。",
+    "load_error_title": "ナレッジを読み込めませんでした",
+    "load_error_fallback": "Git ホストがツリーを返しませんでした。URL と権限を確認してください。"
+  }
+}
