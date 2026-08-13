@@ -65,6 +65,11 @@ import {
   PluginPreviewSchema,
   EMPTY_PLUGIN_INSTALLATION_LIST,
   EMPTY_PLUGIN_PREVIEW,
+  // KB-HOOK: workspace knowledge base schemas
+  EMPTY_KNOWLEDGE_TREE,
+  EMPTY_KNOWLEDGE_FILE,
+  KnowledgeTreeResponseSchema,
+  KnowledgeFileResponseSchema,
 } from "./schemas";
 import { IssueViewSchema, IssueViewListSchema } from "./schemas";
 import {
@@ -2266,5 +2271,44 @@ describe("TaskMessageListSchema", () => {
   it("downgrades an unknown message type instead of dropping the transcript", () => {
     const parsed = TaskMessageListSchema.parse([{ ...row, type: "video" }]);
     expect(parsed[0]?.type).toBe("text");
+  });
+});
+
+// KB-HOOK: workspace knowledge base schema tests
+describe("Knowledge schemas", () => {
+  const treeEndpoint = { endpoint: "GET /api/workspaces/{id}/knowledge/tree" };
+  const fileEndpoint = { endpoint: "GET /api/workspaces/{id}/knowledge/file" };
+
+  it("defaults optional tree fields and keeps entries", () => {
+    const parsed = KnowledgeTreeResponseSchema.parse({
+      repo_url: "https://github.com/acme/kb.git",
+      entries: [{ path: "README.md", type: "blob" }],
+    });
+    expect(parsed.ref).toBe("");
+    expect(parsed.browse_url).toBe("");
+    expect(parsed.entries).toEqual([{ path: "README.md", type: "blob" }]);
+  });
+
+  it("degrades a malformed tree response via parseWithFallback", () => {
+    expect(
+      parseWithFallback(null, KnowledgeTreeResponseSchema, EMPTY_KNOWLEDGE_TREE, treeEndpoint),
+    ).toEqual(EMPTY_KNOWLEDGE_TREE);
+    expect(
+      parseWithFallback({ entries: "nope" }, KnowledgeTreeResponseSchema, EMPTY_KNOWLEDGE_TREE, treeEndpoint),
+    ).toEqual(EMPTY_KNOWLEDGE_TREE);
+  });
+
+  it("defaults optional file fields", () => {
+    const parsed = KnowledgeFileResponseSchema.parse({ path: "README.md", content: "# hi" });
+    expect(parsed.media).toBe("text");
+    expect(parsed.truncated).toBe(false);
+    expect(parsed.size).toBe(0);
+    expect(parsed.content).toBe("# hi");
+  });
+
+  it("degrades a malformed file response via parseWithFallback", () => {
+    expect(
+      parseWithFallback("oops", KnowledgeFileResponseSchema, EMPTY_KNOWLEDGE_FILE, fileEndpoint),
+    ).toEqual(EMPTY_KNOWLEDGE_FILE);
   });
 });

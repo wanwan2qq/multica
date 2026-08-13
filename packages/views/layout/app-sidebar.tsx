@@ -82,6 +82,7 @@ import type { PinnedItem } from "@multica/core/types";
 import { useLogout } from "../auth";
 import { ProjectIcon } from "../projects/components/project-icon";
 import { routeIconForPath } from "./route-icon-components";
+import { pluginWorkspaceNavItems } from "./plugin-nav-items";
 import { useT } from "../i18n";
 import {
   useShortcut,
@@ -123,6 +124,7 @@ type NavKey =
   | "usage"
   | "runtimes"
   | "skills"
+  | "knowledge"
   | "settings";
 
 // Static schema (key only) — labels resolved at render via useT("layout"),
@@ -139,6 +141,7 @@ type NavLabelKey =
   | "usage"
   | "runtimes"
   | "skills"
+  | "knowledge"
   | "settings";
 
 // Nav icons are NOT declared here: they are derived from each item's
@@ -154,6 +157,8 @@ const workNav: { key: NavKey; labelKey: NavLabelKey }[] = [
   { key: "issues", labelKey: "issues" },
   { key: "projects", labelKey: "projects" },
   { key: "autopilots", labelKey: "autopilots" },
+  // KB-HOOK: fork-contributed nav (workspace knowledge base)
+  ...pluginWorkspaceNavItems,
 ];
 
 const aiTeamNav: { key: NavKey; labelKey: NavLabelKey }[] = [
