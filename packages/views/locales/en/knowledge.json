@@ -1,0 +1,19 @@
+{
+  "page": {
+    "title": "Knowledge",
+    "open_in_git": "Open in Git",
+    "tree_aria": "Knowledge files",
+    "truncated": "This file is larger than the preview limit. Open it in Git to read the rest."
+  },
+  "empty": {
+    "not_configured_title": "No knowledge repository",
+    "not_configured_description": "Add a Git URL in Settings → Repositories, and put 知识库 or knowledge in the description so every member sees the same remote default branch.",
+    "open_repositories": "Open repositories",
+    "no_file_title": "Select a file",
+    "no_file_description": "Pick a Markdown file from the tree to preview it. Editing stays in Git.",
+    "binary_title": "Can't preview this file",
+    "binary_description": "Binary files aren't shown here. Open the file in Git instead.",
+    "load_error_title": "Couldn't load the knowledge base",
+    "load_error_fallback": "The Git host didn't return this tree. Check the repository URL and access."
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "page": {
+    "title": "知识库",
+    "open_in_git": "在 Git 中打开",
+    "tree_aria": "知识库文件",
+    "truncated": "文件超过预览大小上限。请到 Git 阅读全文。"
+  },
+  "empty": {
+    "not_configured_title": "尚未配置知识库仓库",
+    "not_configured_description": "到设置 → 代码仓库添加 Git URL，并在说明里写上「知识库」或 knowledge。所有成员看到的都是远程默认分支，不是某人本机副本。",
+    "open_repositories": "打开代码仓库",
+    "no_file_title": "选择一个文件",
+    "no_file_description": "从目录树点开 Markdown 即可预览。编辑仍在 Git 完成。",
+    "binary_title": "无法预览此文件",
+    "binary_description": "二进制文件不在这里展示。请到 Git 打开。",
+    "load_error_title": "无法加载知识库",
+    "load_error_fallback": "Git 托管没有返回目录树。请检查仓库地址和访问权限。"
+  }
+}
