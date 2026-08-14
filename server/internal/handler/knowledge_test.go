@@ -39,12 +39,36 @@ func TestParseGitRemote(t *testing.T) {
 		t.Fatalf("github parse: %+v", gh)
 	}
 
+	t.Setenv("KNOWLEDGE_GIT_PROVIDER", "")
 	ssh, err := parseGitRemote("git@git.example.com:team/docs.git")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ssh.Provider != "gitea" || ssh.Host != "git.example.com" || ssh.Owner != "team" || ssh.Repo != "docs" {
 		t.Fatalf("ssh parse: %+v", ssh)
+	}
+
+	gl, err := parseGitRemote("https://git.lianjia.com/lft/lft-account/byz_workspace.git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gl.Provider != "gitlab" || gl.Host != "git.lianjia.com" || gl.Owner != "lft/lft-account" || gl.Repo != "byz_workspace" {
+		t.Fatalf("gitlab nested parse: %+v", gl)
+	}
+	if gl.projectPath() != "lft/lft-account/byz_workspace" {
+		t.Fatalf("projectPath: %s", gl.projectPath())
+	}
+	if got := gl.browseFile("master", "01-贝易转/_overview.md"); got != "https://git.lianjia.com/lft/lft-account/byz_workspace/-/blob/master/01-贝易转/_overview.md" {
+		t.Fatalf("browseFile: %s", got)
+	}
+
+	t.Setenv("KNOWLEDGE_GIT_PROVIDER", "gitlab")
+	forced, err := parseGitRemote("https://git.example.com/group/docs.git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if forced.Provider != "gitlab" {
+		t.Fatalf("KNOWLEDGE_GIT_PROVIDER override: %+v", forced)
 	}
 }
 
@@ -91,6 +115,51 @@ func TestFetchKnowledgeTreeAndFileHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	if truncated || string(body) != "# hello" {
+		t.Fatalf("file: truncated=%v body=%q", truncated, body)
+	}
+}
+
+func TestFetchGitLabKnowledgeTreeAndFileHTTP(t *testing.T) {
+	t.Setenv("KNOWLEDGE_GIT_TOKEN", "glpat-test")
+	prev := knowledgeHTTPClient
+	t.Cleanup(func() { knowledgeHTTPClient = prev })
+	knowledgeHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Header.Get("PRIVATE-TOKEN") != "glpat-test" {
+			t.Errorf("expected PRIVATE-TOKEN, got %q", req.Header.Get("PRIVATE-TOKEN"))
+		}
+		escaped := req.URL.EscapedPath()
+		switch {
+		case strings.Contains(escaped, "/api/v4/projects/lft%2Flft-account%2Fbyz_workspace") && !strings.Contains(escaped, "/repository/"):
+			return jsonResponse(http.StatusOK, `{"default_branch":"master"}`), nil
+		case strings.Contains(escaped, "/repository/tree"):
+			page := req.URL.Query().Get("page")
+			if page == "1" {
+				resp := jsonResponse(http.StatusOK, `[{"path":"01-贝易转","type":"tree"},{"path":"01-贝易转/_overview.md","type":"blob"}]`)
+				resp.Header.Set("X-Next-Page", "2")
+				return resp, nil
+			}
+			return jsonResponse(http.StatusOK, `[{"path":"README.md","type":"blob"}]`), nil
+		case strings.Contains(escaped, "/repository/files/") && strings.HasSuffix(escaped, "/raw"):
+			return textResponse(http.StatusOK, "# 贝易转"), nil
+		default:
+			return jsonResponse(http.StatusNotFound, `{"message":"nope"}`), nil
+		}
+	})}
+
+	remote := gitRemote{Host: "git.lianjia.com", Owner: "lft/lft-account", Repo: "byz_workspace", Provider: "gitlab"}
+	ref, entries, err := fetchKnowledgeTreeHTTP(context.Background(), remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref != "master" || len(entries) != 3 || entries[1].Path != "01-贝易转/_overview.md" {
+		t.Fatalf("tree: ref=%s entries=%+v", ref, entries)
+	}
+
+	body, truncated, err := fetchKnowledgeFileHTTP(context.Background(), remote, "master", "01-贝易转/_overview.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if truncated || string(body) != "# 贝易转" {
 		t.Fatalf("file: truncated=%v body=%q", truncated, body)
 	}
 }
