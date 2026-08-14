@@ -189,6 +189,9 @@ MULTICA_PUBLIC_URL=https://api.multica.example.com
 | 插件 | `MULTICA_PLUGIN_SURFACE_ORIGIN` | 路由到后端的独立无 Cookie 浏览器 origin；必须不同于 app/API origin，并保留 `Host` |
 | 插件 | `MULTICA_PLUGIN_API_URL` | 带版本的插件 Public API 完整 Base URL，例如 `https://plugin-api.example.com/v1`；未设置时使用 `MULTICA_PUBLIC_URL` + `/v1` |
 | 插件 | `MULTICA_PLUGIN_DIR` | 开发时用于发布本地插件包的可选绝对目录 |
+| 知识库浏览 | `KNOWLEDGE_GIT_TOKEN` | 私有 Gitea / Forgejo / GitLab 知识库的 PAT（GitLab 需 `read_api` + `read_repository`） |
+| 知识库浏览 | `KNOWLEDGE_GIT_PROVIDER` | 可选覆盖；两段路径的 GitLab 设为 `gitlab`。嵌套 `group/sub/project` 会自动识别 |
+| 知识库浏览 | `GITHUB_TOKEN` | 知识库是私有 GitHub 仓时可选 |
 
 不配置 `GITHUB_APP_ID` 和私钥时，PR 仍会正常关联、镜像和触发合并转 done，但卡片上不显示 CI 与可合并状态，"从 GitHub 选择"仓库入口也会禁用。
 

@@ -189,6 +189,9 @@ The auth rate limits require `REDIS_URL`; without it, the startup log notes that
 | Plugins | `MULTICA_PLUGIN_SURFACE_ORIGIN` | Dedicated cookie-free browser origin routed to this backend; must differ from app/API origins and preserve `Host` |
 | Plugins | `MULTICA_PLUGIN_API_URL` | Complete versioned Plugin Public API base URL, such as `https://plugin-api.example.com/v1`; falls back to `MULTICA_PUBLIC_URL` + `/v1` |
 | Plugins | `MULTICA_PLUGIN_DIR` | Optional absolute directory used to publish local plugin bundles during development |
+| Knowledge browse | `KNOWLEDGE_GIT_TOKEN` | PAT for private Gitea / Forgejo / GitLab knowledge repos (`read_api` + `read_repository` on GitLab) |
+| Knowledge browse | `KNOWLEDGE_GIT_PROVIDER` | Optional override; set `gitlab` for two-segment GitLab URLs. Nested `group/sub/project` paths are detected automatically |
+| Knowledge browse | `GITHUB_TOKEN` | Optional GitHub token when the knowledge repo is a private GitHub repository |
 
 Without `GITHUB_APP_ID` and the private key, PRs still link, mirror, and trigger merge-to-done normally, but cards show no CI or mergeability status, and the "pick from GitHub" repository entry is disabled.
 
