@@ -171,6 +171,9 @@ MULTICA_PUBLIC_URL=https://api.multica.example.com
 | Composio | `COMPOSIO_STATE_SECRET` | OAuth state 签名密钥；可从 `JWT_SECRET` 派生 |
 | 自托管 Git | `MULTICA_VCS_INTEGRATION_ENABLED` | Forgejo/Gitea/GitLab 集成开关，compose 默认开启 |
 | 自托管 Git | `MULTICA_VCS_SECRET_KEY` | base64 编码的 32 字节加密密钥（`openssl rand -base64 32`）；未配置时该功能整体不可用 |
+| 知识库浏览 | `KNOWLEDGE_GIT_TOKEN` | 私有 Gitea / Forgejo / GitLab 知识库的 PAT（GitLab 需 `read_api` + `read_repository`） |
+| 知识库浏览 | `KNOWLEDGE_GIT_PROVIDER` | 可选覆盖；两段路径的 GitLab 设为 `gitlab`。嵌套 `group/sub/project` 会自动识别 |
+| 知识库浏览 | `GITHUB_TOKEN` | 知识库是私有 GitHub 仓时可选 |
 
 不配置 `GITHUB_APP_ID` 和私钥时，PR 仍会正常关联、镜像和触发合并转 done，但卡片上不显示 CI 与可合并状态，"从 GitHub 选择"仓库入口也会禁用。
 

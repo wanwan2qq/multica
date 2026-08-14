@@ -171,6 +171,9 @@ The auth rate limits require `REDIS_URL`; without it, the startup log notes that
 | Composio | `COMPOSIO_STATE_SECRET` | OAuth state signing secret; can be derived from `JWT_SECRET` |
 | Self-hosted Git | `MULTICA_VCS_INTEGRATION_ENABLED` | Forgejo/Gitea/GitLab integration switch; enabled by default in compose |
 | Self-hosted Git | `MULTICA_VCS_SECRET_KEY` | Base64-encoded 32-byte encryption key (`openssl rand -base64 32`); the feature is entirely unavailable without it |
+| Knowledge browse | `KNOWLEDGE_GIT_TOKEN` | PAT for private Gitea / Forgejo / GitLab knowledge repos (`read_api` + `read_repository` on GitLab) |
+| Knowledge browse | `KNOWLEDGE_GIT_PROVIDER` | Optional override; set `gitlab` for two-segment GitLab URLs. Nested `group/sub/project` paths are detected automatically |
+| Knowledge browse | `GITHUB_TOKEN` | Optional GitHub token when the knowledge repo is a private GitHub repository |
 
 Without `GITHUB_APP_ID` and the private key, PRs still link, mirror, and trigger merge-to-done normally, but cards show no CI or mergeability status, and the "pick from GitHub" repository entry is disabled.
 
