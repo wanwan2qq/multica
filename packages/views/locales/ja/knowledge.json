@@ -3,7 +3,11 @@
     "title": "ナレッジ",
     "open_in_git": "Git で開く",
     "tree_aria": "ナレッジファイル",
-    "truncated": "プレビュー上限を超えています。続きは Git で開いてください。"
+    "tree_title": "ファイル",
+    "expand_all": "すべて展開",
+    "collapse_all": "すべて折りたたむ",
+    "truncated": "プレビュー上限を超えています。続きは Git で開いてください。",
+    "breadcrumb_aria": "ファイルパス"
   },
   "empty": {
     "not_configured_title": "ナレッジリポジトリが未設定です",
