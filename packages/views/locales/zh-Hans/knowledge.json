@@ -3,7 +3,11 @@
     "title": "知识库",
     "open_in_git": "在 Git 中打开",
     "tree_aria": "知识库文件",
-    "truncated": "文件超过预览大小上限。请到 Git 阅读全文。"
+    "tree_title": "文件",
+    "expand_all": "全部展开",
+    "collapse_all": "全部折叠",
+    "truncated": "文件超过预览大小上限。请到 Git 阅读全文。",
+    "breadcrumb_aria": "文件路径"
   },
   "empty": {
     "not_configured_title": "尚未配置知识库仓库",

@@ -3,7 +3,11 @@
     "title": "Knowledge",
     "open_in_git": "Open in Git",
     "tree_aria": "Knowledge files",
-    "truncated": "This file is larger than the preview limit. Open it in Git to read the rest."
+    "tree_title": "Files",
+    "expand_all": "Expand all",
+    "collapse_all": "Collapse all",
+    "truncated": "This file is larger than the preview limit. Open it in Git to read the rest.",
+    "breadcrumb_aria": "File path"
   },
   "empty": {
     "not_configured_title": "No knowledge repository",

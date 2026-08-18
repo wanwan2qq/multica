@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { AlertCircle, ExternalLink, FileQuestion, Library } from "lucide-react";
+import { Fragment, useEffect, useMemo } from "react";
+import { AlertCircle, ChevronRight, ExternalLink, FileQuestion, Library } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { errorCode } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
@@ -19,8 +19,9 @@ import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { AppLink, useNavigation } from "../navigation";
 import { CollectionPageHeader, CollectionPageState } from "../layout/collection-page";
 import { RichContent } from "../rich-content";
-import { FileTree } from "../skills/components/file-tree";
 import { useT } from "../i18n";
+import { KnowledgeTree } from "./knowledge-tree";
+import { resolveKnowledgeLinks } from "./resolve-links";
 
 function blobPaths(entries: KnowledgeTreeEntry[]): string[] {
   return entries.filter((entry) => entry.type === "blob").map((entry) => entry.path);
@@ -87,7 +88,7 @@ export function KnowledgePage() {
 
       {treeQuery.isPending ? (
         <div className="flex min-h-0 flex-1 md:flex-row">
-          <div className="space-y-2 border-b border-surface-border p-4 md:w-64 md:border-b-0 md:border-r">
+          <div className="space-y-2 border-b border-surface-border p-4 md:w-72 md:border-b-0 md:border-r">
             <Skeleton className="h-6 w-40" />
             <Skeleton className="h-6 w-32" />
             <Skeleton className="h-6 w-48" />
@@ -135,7 +136,7 @@ export function KnowledgePage() {
                 {t(($) => $.empty.no_file_description)}
               </p>
             ) : (
-              <FileTree
+              <KnowledgeTree
                 filePaths={files}
                 selectedPath={pathParam}
                 onSelect={selectPath}
@@ -167,12 +168,19 @@ export function KnowledgePage() {
                 }
               />
             ) : (
-              <KnowledgeFileBody
-                media={fileQuery.data?.media ?? "text"}
-                content={fileQuery.data?.content ?? ""}
-                truncated={fileQuery.data?.truncated === true}
-                browseURL={fileQuery.data?.browse_url ?? browseURL}
-              />
+              <>
+                <KnowledgeBreadcrumb
+                  currentPath={pathParam}
+                  onSelectPath={selectPath}
+                />
+                <KnowledgeFileBody
+                  currentPath={pathParam}
+                  media={fileQuery.data?.media ?? "text"}
+                  content={fileQuery.data?.content ?? ""}
+                  truncated={fileQuery.data?.truncated === true}
+                  browseURL={fileQuery.data?.browse_url ?? browseURL}
+                />
+              </>
             )}
           </section>
         </div>
@@ -181,18 +189,69 @@ export function KnowledgePage() {
   );
 }
 
+function KnowledgeBreadcrumb({
+  currentPath,
+  onSelectPath,
+}: {
+  currentPath: string;
+  onSelectPath: (path: string) => void;
+}) {
+  const { t } = useT("knowledge");
+  const segments = currentPath.split("/");
+
+  return (
+    <nav
+      aria-label={t(($) => $.page.breadcrumb_aria)}
+      className="flex items-center gap-0.5 border-b border-surface-border px-4 py-2 overflow-x-auto"
+    >
+      {segments.map((segment, i) => {
+        const isLast = i === segments.length - 1;
+        const path = segments.slice(0, i + 1).join("/");
+        return (
+          <Fragment key={path}>
+            {i > 0 && (
+              <ChevronRight className="h-3 w-3 shrink-0 text-faint-foreground" />
+            )}
+            {isLast ? (
+              <span className="truncate text-caption font-medium text-foreground">
+                {segment}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSelectPath(path)}
+                className="truncate text-caption text-muted-foreground hover:text-foreground transition-colors rounded px-1 -mx-1"
+              >
+                {segment}
+              </button>
+            )}
+          </Fragment>
+        );
+      })}
+    </nav>
+  );
+}
+
 function KnowledgeFileBody({
+  currentPath,
   media,
   content,
   truncated,
   browseURL,
 }: {
+  currentPath: string;
   media: string;
   content: string;
   truncated: boolean;
   browseURL: string;
 }) {
   const { t } = useT("knowledge");
+
+  // Resolve relative links in markdown to knowledge-page URLs
+  const resolvedContent = useMemo(
+    () => (media === "markdown" ? resolveKnowledgeLinks(content, currentPath) : content),
+    [media, content, currentPath],
+  );
 
   if (media === "binary") {
     return (
@@ -228,11 +287,11 @@ function KnowledgeFileBody({
       ) : null}
       {media === "markdown" ? (
         <div className="mx-auto max-w-[68ch] px-6 pb-24 pt-7 sm:px-8">
-          <RichContent content={content} density="document" phase="settled" />
+          <RichContent content={resolvedContent} density="document" phase="settled" />
         </div>
       ) : (
         <pre className="mx-auto max-w-[80ch] overflow-x-auto px-6 py-7 font-mono text-caption leading-relaxed text-foreground">
-          {content}
+          {resolvedContent}
         </pre>
       )}
     </div>
