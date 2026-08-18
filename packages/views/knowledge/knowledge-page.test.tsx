@@ -111,7 +111,9 @@ describe("KnowledgePage", () => {
     };
     renderPage();
     expect(screen.getByText("No knowledge repository")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open repositories" })).toHaveAttribute(
+    const links = screen.getAllByRole("button", { name: "Open repositories" });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0]).toHaveAttribute(
       "href",
       "/acme/settings?tab=repositories",
     );

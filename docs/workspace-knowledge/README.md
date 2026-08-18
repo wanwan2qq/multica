@@ -22,6 +22,8 @@
 | [04-execution.md](04-execution.md) | 分阶段执行步骤与验收 |
 | [05-skill.md](05-skill.md) | 工作区 Skill `workspace-knowledge` 草案 |
 | [06-mcp-contract.md](06-mcp-contract.md) | MCP 工具契约（只读） |
+| [07-ux-optimization.md](07-ux-optimization.md) | 知识库浏览页面 UX 优化 |
+| [upstream-sync/](upstream-sync/) | 上游同步记录 |
 
 相关：团队产研流程落地方案在知识库  
 `01-贝易转/02-研发过程/Multica产研流程落地方案.md`。

@@ -3,7 +3,11 @@
     "title": "지식 베이스",
     "open_in_git": "Git에서 열기",
     "tree_aria": "지식 베이스 파일",
-    "truncated": "미리보기 크기 제한을 초과했습니다. 나머지는 Git에서 확인하세요."
+    "tree_title": "파일",
+    "expand_all": "모두 펼치기",
+    "collapse_all": "모두 접기",
+    "truncated": "미리보기 크기 제한을 초과했습니다. 나머지는 Git에서 확인하세요.",
+    "breadcrumb_aria": "파일 경로"
   },
   "empty": {
     "not_configured_title": "지식 베이스 저장소가 없습니다",
