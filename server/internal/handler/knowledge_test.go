@@ -76,6 +76,12 @@ func TestClassifyKnowledgeMedia(t *testing.T) {
 	if got := classifyKnowledgeMedia("a.md", []byte("# hi")); got != "markdown" {
 		t.Fatalf("md: %s", got)
 	}
+	if got := classifyKnowledgeMedia("a.html", []byte("<p>hi</p>")); got != "html" {
+		t.Fatalf("html: %s", got)
+	}
+	if got := classifyKnowledgeMedia("a.htm", []byte("<p>hi</p>")); got != "html" {
+		t.Fatalf("htm: %s", got)
+	}
 	if got := classifyKnowledgeMedia("a.png", []byte("xxxx")); got != "binary" {
 		t.Fatalf("png: %s", got)
 	}

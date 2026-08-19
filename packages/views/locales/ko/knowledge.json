@@ -17,6 +17,7 @@
     "no_file_description": "트리에서 Markdown을 선택하면 미리볼 수 있습니다. 편집은 Git에서 합니다.",
     "binary_title": "이 파일은 미리볼 수 없습니다",
     "binary_description": "바이너리 파일은 여기에서 보여 주지 않습니다. Git에서 여세요.",
+    "html_sandbox_notice": "HTML 미리보기는 샌드박스에서 렌더링됩니다 —— 스크립트와 양식은 비활성화되며 외부 링크는 새 탭에서 열립니다.",
     "load_error_title": "지식 베이스를 불러오지 못했습니다",
     "load_error_fallback": "Git 호스트가 트리를 반환하지 않았습니다. URL과 권한을 확인하세요."
   }

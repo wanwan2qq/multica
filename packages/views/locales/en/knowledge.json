@@ -17,6 +17,7 @@
     "no_file_description": "Pick a Markdown file from the tree to preview it. Editing stays in Git.",
     "binary_title": "Can't preview this file",
     "binary_description": "Binary files aren't shown here. Open the file in Git instead.",
+    "html_sandbox_notice": "HTML preview is sandboxed — scripts and forms are disabled, external links open in a new tab.",
     "load_error_title": "Couldn't load the knowledge base",
     "load_error_fallback": "The Git host didn't return this tree. Check the repository URL and access."
   }
