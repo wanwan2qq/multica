@@ -17,6 +17,7 @@
     "no_file_description": "从目录树点开 Markdown 即可预览。编辑仍在 Git 完成。",
     "binary_title": "无法预览此文件",
     "binary_description": "二进制文件不在这里展示。请到 Git 打开。",
+    "html_sandbox_notice": "HTML 预览在沙箱中渲染 —— 脚本与表单已禁用，外部链接会在新标签页打开。",
     "load_error_title": "无法加载知识库",
     "load_error_fallback": "Git 托管没有返回目录树。请检查仓库地址和访问权限。"
   }
