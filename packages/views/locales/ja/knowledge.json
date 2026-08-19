@@ -17,6 +17,7 @@
     "no_file_description": "ツリーから Markdown を選ぶとプレビューできます。編集は Git 側で行います。",
     "binary_title": "このファイルはプレビューできません",
     "binary_description": "バイナリはここでは表示しません。Git で開いてください。",
+    "html_sandbox_notice": "HTML のプレビューはサンドボックス化されています —— スクリプトとフォームは無効、外部リンクは新しいタブで開きます。",
     "load_error_title": "ナレッジを読み込めませんでした",
     "load_error_fallback": "Git ホストがツリーを返しませんでした。URL と権限を確認してください。"
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -10,6 +10,7 @@ import {
   Braces,
   Image,
   Palette,
+  Globe,
   Folder,
   FolderOpen,
   ChevronsDownUp,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import { useT } from "../i18n";
+import { useTreeExpandStore, type TreeExpandStore } from "@multica/core/knowledge/stores/tree-expand-store";
 
 // ---------------------------------------------------------------------------
 // Tree data structures
@@ -69,11 +71,13 @@ function buildTree(filePaths: string[]): TreeNode[] {
 // File type detection
 // ---------------------------------------------------------------------------
 
-type FileIconKind = "markdown" | "code" | "config" | "image" | "style" | "generic";
+type FileIconKind = "markdown" | "html" | "code" | "config" | "image" | "style" | "generic";
 
 const EXT_ICON_MAP: Record<string, FileIconKind> = {
   ".md": "markdown",
   ".mdx": "markdown",
+  ".html": "html",
+  ".htm": "html",
   ".ts": "code",
   ".tsx": "code",
   ".js": "code",
@@ -127,6 +131,7 @@ function getFileExtension(name: string): string {
 
 const ICON_CLASS: Record<FileIconKind, string> = {
   markdown: "text-sky-500",
+  html: "text-sky-500",
   code: "text-violet-500",
   config: "text-amber-500",
   image: "text-emerald-500",
@@ -136,6 +141,7 @@ const ICON_CLASS: Record<FileIconKind, string> = {
 
 const EXT_BADGE_CLASS: Record<FileIconKind, string> = {
   markdown: "text-sky-600/70",
+  html: "text-sky-600/70",
   code: "text-violet-600/70",
   config: "text-amber-600/70",
   image: "text-emerald-600/70",
@@ -218,6 +224,8 @@ function TreeNodeItem({
     switch (kind) {
       case "markdown":
         return FileText;
+      case "html":
+        return Globe;
       case "code":
         return FileCode;
       case "config":
@@ -261,52 +269,45 @@ function TreeNodeItem({
 // Public component
 // ---------------------------------------------------------------------------
 
+const EMPTY_ARRAY: readonly string[] = Object.freeze([]);
+
 export function KnowledgeTree({
+  wsId,
   filePaths,
   selectedPath,
   onSelect,
 }: {
+  wsId: string;
   filePaths: string[];
   selectedPath: string;
   onSelect: (path: string) => void;
 }) {
   const { t } = useT("knowledge");
-  const tree = buildTree(filePaths);
+  const tree = useMemo(() => buildTree(filePaths), [filePaths]);
 
-  // Start with all directories expanded.
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const paths = new Set<string>();
-    function collect(nodes: TreeNode[]) {
-      for (const n of nodes) {
-        if (n.isDirectory) {
-          paths.add(n.path);
-          collect(n.children);
-        }
-      }
-    }
-    collect(tree);
-    return paths;
-  });
+  // Persisted, workspace-scoped set of expanded folder paths. New dirs that
+  // arrive in later fetches default to collapsed — only paths the user has
+  // explicitly opened are stored.
+  const expandedList = useTreeExpandStore(
+    (s: TreeExpandStore) => s.expandedByWs[wsId] ?? EMPTY_ARRAY,
+  );
+  const expanded = useMemo(() => new Set(expandedList), [expandedList]);
 
-  const allExpanded = expanded.size === collectAllDirs(tree).size;
+  const allDirs = useMemo(() => collectAllDirs(tree), [tree]);
+  const allExpanded = allDirs.size > 0 && expanded.size === allDirs.size;
 
-  const toggle = useCallback((path: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-  }, []);
+  const toggle = useCallback(
+    (path: string) => useTreeExpandStore.getState().toggle(wsId, path),
+    [wsId],
+  );
 
   const toggleAll = useCallback(() => {
-    const all = collectAllDirs(tree);
-    if (expanded.size === all.size) {
-      setExpanded(new Set());
+    if (allExpanded) {
+      useTreeExpandStore.getState().collapseAll(wsId);
     } else {
-      setExpanded(all);
+      useTreeExpandStore.getState().expandAll(wsId, Array.from(allDirs));
     }
-  }, [expanded, tree]);
+  }, [allDirs, allExpanded, wsId]);
 
   const isExpanded = useCallback(
     (path: string) => expanded.has(path),

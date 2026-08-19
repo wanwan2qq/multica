@@ -1,15 +1,33 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nProvider } from "@multica/core/i18n/react";
 import { ApiError } from "@multica/core/api";
 import enCommon from "../locales/en/common.json";
 import enKnowledge from "../locales/en/knowledge.json";
 import enSkills from "../locales/en/skills.json";
+import { useTreeExpandStore } from "@multica/core/knowledge/stores/tree-expand-store";
 import { NavigationProvider, type NavigationAdapter } from "../navigation";
 import { KnowledgePage } from "./knowledge-page";
+
+// react-resizable-panels relies on layout-side observers (`mountGroup` exercises
+// `IntersectionObserver` / `ResizeObserver` to bootstrap drag handles) that
+// jsdom does not provide. Pass the real exports through and stub only the
+// primitives + `useDefaultLayout` so the resizable shell renders without
+// DOM measurement.
+vi.mock("react-resizable-panels", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-resizable-panels")>();
+  return {
+    ...actual,
+    Group: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    Panel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    Separator: () => null,
+    useDefaultLayout: () => ({ defaultLayout: undefined, onLayoutChanged: vi.fn() }),
+  };
+});
 
 const TEST_RESOURCES = {
   en: { common: enCommon, knowledge: enKnowledge, skills: enSkills },
@@ -84,6 +102,8 @@ describe("KnowledgePage", () => {
   beforeEach(() => {
     replace.mockReset();
     searchRef.current = new URLSearchParams();
+    globalThis.localStorage?.clear?.();
+    useTreeExpandStore.setState({ expandedByWs: {} });
     treeRef.current = {
       isPending: false,
       isError: false,
@@ -97,6 +117,10 @@ describe("KnowledgePage", () => {
       data: undefined,
       error: null,
     };
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("asks the user to label a repo when none is configured", () => {
@@ -152,5 +176,46 @@ describe("KnowledgePage", () => {
     renderPage();
     expect(screen.getByText("# Hello KB")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
+  });
+
+  it("renders html files in a sandboxed iframe", () => {
+    searchRef.current = new URLSearchParams("path=page.html");
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [{ path: "page.html", type: "blob" }],
+      },
+      error: null,
+    };
+    fileRef.current = {
+      isPending: false,
+      isError: false,
+      data: {
+        path: "page.html",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/blob/main/page.html",
+        media: "html",
+        truncated: false,
+        size: 21,
+        content: "<p>Hello HTML</p>",
+      },
+      error: null,
+    };
+    renderPage();
+    const iframe = document.querySelector("iframe");
+    expect(iframe).toBeTruthy();
+    expect(iframe?.getAttribute("sandbox")).toBe("allow-popups");
+    expect(iframe?.getAttribute("title")).toBe("page.html");
+    expect(iframe?.getAttribute("srcDoc")).toContain("Hello HTML");
+    expect(
+      screen.getByText(/HTML preview is sandboxed/),
+    ).toBeTruthy();
   });
 });
