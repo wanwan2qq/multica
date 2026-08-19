@@ -161,6 +161,8 @@ func classifyKnowledgeMedia(filePath string, body []byte) string {
 	switch ext {
 	case ".md", ".markdown":
 		return "markdown"
+	case ".html", ".htm":
+		return "html"
 	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".woff", ".woff2":
 		return "binary"
 	}

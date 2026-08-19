@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo } from "react";
+import { useDefaultLayout } from "react-resizable-panels";
 import { AlertCircle, ChevronRight, ExternalLink, FileQuestion, Library } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { errorCode } from "@multica/core/api";
@@ -15,6 +16,11 @@ import {
 } from "@multica/core/knowledge/queries";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { Button } from "@multica/ui/components/ui/button";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@multica/ui/components/ui/resizable";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { AppLink, useNavigation } from "../navigation";
 import { CollectionPageHeader, CollectionPageState } from "../layout/collection-page";
@@ -33,6 +39,9 @@ export function KnowledgePage() {
   const p = useWorkspacePaths();
   const { pathname, searchParams, replace } = useNavigation();
   const pathParam = searchParams.get("path") ?? "";
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: "multica_knowledge_layout",
+  });
 
   const treeQuery = useQuery(knowledgeTreeOptions(wsId));
   const fileQuery = useQuery(knowledgeFileOptions(wsId, pathParam));
@@ -126,64 +135,81 @@ export function KnowledgePage() {
           }
         />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          <aside
-            className="shrink-0 border-b border-surface-border p-3 md:w-72 md:overflow-y-auto md:border-b-0 md:border-r md:p-4"
-            aria-label={t(($) => $.page.tree_aria)}
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="flex-1 min-h-0"
+          defaultLayout={defaultLayout}
+          onLayoutChanged={onLayoutChanged}
+        >
+          <ResizablePanel
+            id="tree"
+            defaultSize={288}
+            minSize={200}
+            maxSize={480}
+            groupResizeBehavior="preserve-pixel-size"
           >
-            {files.length === 0 ? (
-              <p className="px-2.5 py-2 text-caption text-muted-foreground">
-                {t(($) => $.empty.no_file_description)}
-              </p>
-            ) : (
-              <KnowledgeTree
-                filePaths={files}
-                selectedPath={pathParam}
-                onSelect={selectPath}
-              />
-            )}
-          </aside>
-          <section className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-            {!pathParam ? (
-              <CollectionPageState
-                icon={FileQuestion}
-                title={t(($) => $.empty.no_file_title)}
-                description={t(($) => $.empty.no_file_description)}
-              />
-            ) : fileQuery.isPending ? (
-              <div className="mx-auto max-w-[68ch] px-6 pt-7">
-                <Skeleton className="h-8 w-64" />
-                <Skeleton className="mt-4 h-48 w-full" />
-              </div>
-            ) : fileQuery.isError ? (
-              <CollectionPageState
-                role="alert"
-                tone="destructive"
-                icon={AlertCircle}
-                title={t(($) => $.empty.load_error_title)}
-                description={
-                  fileQuery.error instanceof Error
-                    ? fileQuery.error.message
-                    : t(($) => $.empty.load_error_fallback)
-                }
-              />
-            ) : (
-              <>
-                <KnowledgeBreadcrumb
-                  currentPath={pathParam}
-                  onSelectPath={selectPath}
+            <aside
+              className="h-full overflow-y-auto border-r border-surface-border p-3 md:p-4"
+              aria-label={t(($) => $.page.tree_aria)}
+            >
+              {files.length === 0 ? (
+                <p className="px-2.5 py-2 text-caption text-muted-foreground">
+                  {t(($) => $.empty.no_file_description)}
+                </p>
+              ) : (
+                <KnowledgeTree
+                  wsId={wsId}
+                  filePaths={files}
+                  selectedPath={pathParam}
+                  onSelect={selectPath}
                 />
-                <KnowledgeFileBody
-                  currentPath={pathParam}
-                  media={fileQuery.data?.media ?? "text"}
-                  content={fileQuery.data?.content ?? ""}
-                  truncated={fileQuery.data?.truncated === true}
-                  browseURL={fileQuery.data?.browse_url ?? browseURL}
+              )}
+            </aside>
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel id="content" minSize="40%">
+            <section className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+              {!pathParam ? (
+                <CollectionPageState
+                  icon={FileQuestion}
+                  title={t(($) => $.empty.no_file_title)}
+                  description={t(($) => $.empty.no_file_description)}
                 />
-              </>
-            )}
-          </section>
-        </div>
+              ) : fileQuery.isPending ? (
+                <div className="mx-auto max-w-[68ch] px-6 pt-7">
+                  <Skeleton className="h-8 w-64" />
+                  <Skeleton className="mt-4 h-48 w-full" />
+                </div>
+              ) : fileQuery.isError ? (
+                <CollectionPageState
+                  role="alert"
+                  tone="destructive"
+                  icon={AlertCircle}
+                  title={t(($) => $.empty.load_error_title)}
+                  description={
+                    fileQuery.error instanceof Error
+                      ? fileQuery.error.message
+                      : t(($) => $.empty.load_error_fallback)
+                  }
+                />
+              ) : (
+                <>
+                  <KnowledgeBreadcrumb
+                    currentPath={pathParam}
+                    onSelectPath={selectPath}
+                  />
+                  <KnowledgeFileBody
+                    currentPath={pathParam}
+                    media={fileQuery.data?.media ?? "text"}
+                    content={fileQuery.data?.content ?? ""}
+                    truncated={fileQuery.data?.truncated === true}
+                    browseURL={fileQuery.data?.browse_url ?? browseURL}
+                  />
+                </>
+              )}
+            </section>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       )}
     </div>
   );
@@ -288,6 +314,18 @@ function KnowledgeFileBody({
       {media === "markdown" ? (
         <div className="mx-auto max-w-[68ch] px-6 pb-24 pt-7 sm:px-8">
           <RichContent content={resolvedContent} density="document" phase="settled" />
+        </div>
+      ) : media === "html" ? (
+        <div className="flex h-full min-h-0 flex-col">
+          <iframe
+            srcDoc={resolvedContent}
+            sandbox="allow-popups"
+            title={currentPath}
+            className="min-h-[60vh] w-full flex-1 border-0 bg-background"
+          />
+          <p className="border-t border-surface-border px-6 py-2 text-caption text-muted-foreground">
+            {t(($) => $.empty.html_sandbox_notice)}
+          </p>
         </div>
       ) : (
         <pre className="mx-auto max-w-[80ch] overflow-x-auto px-6 py-7 font-mono text-caption leading-relaxed text-foreground">

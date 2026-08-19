@@ -17,7 +17,7 @@ export type KnowledgeFileResponse = {
   path: string;
   ref: string;
   browse_url: string;
-  media: "markdown" | "text" | "binary";
+  media: "markdown" | "text" | "binary" | "html";
   truncated: boolean;
   size: number;
   content: string;
