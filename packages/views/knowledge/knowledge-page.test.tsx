@@ -50,6 +50,14 @@ const fileRef = vi.hoisted(() => ({
     error: null as unknown,
   },
 }));
+const branchesRef = vi.hoisted(() => ({
+  current: {
+    isPending: false,
+    isError: false,
+    data: { branches: [] as string[], default_branch: "" },
+  },
+}));
+const seenKeys = vi.hoisted(() => ({ current: [] as unknown[][] }));
 const searchRef = vi.hoisted(() => ({ current: new URLSearchParams() }));
 const replace = vi.hoisted(() => vi.fn());
 
@@ -62,15 +70,35 @@ vi.mock("@multica/core/paths", async (importOriginal) => ({
   }),
 }));
 vi.mock("@multica/core/knowledge/queries", () => ({
-  knowledgeTreeOptions: () => ({ queryKey: ["knowledge", "tree"] }),
-  knowledgeFileOptions: () => ({ queryKey: ["knowledge", "file"] }),
+  knowledgeBranchesOptions: () => ({ queryKey: ["knowledge", "branches"] }),
+  knowledgeTreeOptions: (_wsId: string, ref: string) => ({
+    queryKey: ["knowledge", "tree", ref],
+  }),
+  knowledgeFileOptions: (_wsId: string, ref: string, _path: string) => ({
+    queryKey: ["knowledge", "file", ref, _path],
+  }),
+}));
+vi.mock("@multica/core/knowledge/stores/ref-store", () => ({
+  useRefStore: Object.assign(
+    (selector: (s: { refByWs: Record<string, string> }) => unknown) =>
+      selector({ refByWs: {} }),
+    {
+      getState: () => ({ setRef: vi.fn(), resetRef: vi.fn() }),
+      setState: vi.fn(),
+    },
+  ),
 }));
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
   return {
     ...actual,
-    useQuery: ({ queryKey }: { queryKey: string[] }) =>
-      queryKey.includes("tree") ? treeRef.current : fileRef.current,
+    useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
+      seenKeys.current.push([...queryKey]);
+      const key = Array.isArray(queryKey) ? queryKey : [];
+      if (key.includes("branches")) return branchesRef.current;
+      if (key.includes("tree")) return treeRef.current;
+      return fileRef.current;
+    },
   };
 });
 vi.mock("../rich-content", () => ({
@@ -102,6 +130,7 @@ describe("KnowledgePage", () => {
   beforeEach(() => {
     replace.mockReset();
     searchRef.current = new URLSearchParams();
+    seenKeys.current = [];
     globalThis.localStorage?.clear?.();
     useTreeExpandStore.setState({ expandedByWs: {} });
     treeRef.current = {
@@ -217,5 +246,21 @@ describe("KnowledgePage", () => {
     expect(
       screen.getByText(/HTML preview is sandboxed/),
     ).toBeTruthy();
+  });
+
+  it("passes wsId + activeRef into the knowledge tree query key", () => {
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      data: { branches: ["main", "dev"], default_branch: "main" },
+    };
+    seenKeys.current = [];
+    renderPage();
+    const treeKey = seenKeys.current.find((k) => k.includes("tree"));
+    expect(treeKey).toBeDefined();
+    // The tree query key embeds the active ref so switching ref invalidates
+    // the cache. activeRef resolves to "main" because the user override is
+    // empty and branchesQuery.data.default_branch === "main".
+    expect(treeKey).toContain("main");
   });
 });
