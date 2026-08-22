@@ -58,6 +58,21 @@ export function KnowledgePage() {
   const treeQuery = useQuery(knowledgeTreeOptions(wsId, activeRef));
   const fileQuery = useQuery(knowledgeFileOptions(wsId, activeRef, pathParam));
 
+  // Render-time ref guards: when the user switches branches, `activeRef`
+  // flips and the new query starts, but `treeQuery.data` / `fileQuery.data`
+  // still hold the *previous* ref's response until the new one lands. Treat
+  // mismatched data as "not yet ready" so we render a skeleton instead of
+  // stale content during the transition. (No data + error stays an error.)
+  const treeIsForCurrentRef = treeQuery.data?.ref === activeRef;
+  const fileIsForCurrentRef =
+    fileQuery.data?.ref === activeRef && fileQuery.data?.path === pathParam;
+  const hasStaleTreeData = Boolean(treeQuery.data) && !treeIsForCurrentRef;
+  const hasStaleFileData = Boolean(fileQuery.data) && !fileIsForCurrentRef;
+  const showTreePending = treeQuery.isPending || hasStaleTreeData;
+  const showTreeError = treeQuery.isError && treeIsForCurrentRef;
+  const showFilePending = fileQuery.isPending || hasStaleFileData;
+  const showFileError = fileQuery.isError && fileIsForCurrentRef;
+
   const files = useMemo(
     () => blobPaths(treeQuery.data?.entries ?? []),
     [treeQuery.data?.entries],
@@ -69,13 +84,16 @@ export function KnowledgePage() {
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
-    if (pathParam.length > 0 || !treeQuery.isSuccess) return;
+    // Wait for the tree response that actually corresponds to `activeRef`;
+    // otherwise an in-flight refetch for the *previous* ref could land us
+    // on a stale default-path redirect.
+    if (pathParam.length > 0 || !treeQuery.isSuccess || !treeIsForCurrentRef) return;
     const next = defaultKnowledgePath(files);
     if (!next) return;
     const params = new URLSearchParams(searchParams);
     params.set("path", next);
     replace(`${pathname}?${params.toString()}`);
-  }, [files, pathParam, pathname, replace, searchParams, treeQuery.isSuccess]);
+  }, [files, pathParam, pathname, replace, searchParams, treeQuery.isSuccess, treeIsForCurrentRef]);
 
   const selectPath = (next: string) => {
     const params = new URLSearchParams(searchParams);
@@ -102,15 +120,17 @@ export function KnowledgePage() {
   const notConfigured = errorCode(treeQuery.error) === "knowledge_repo_not_configured";
   const reposHref = `${p.settings()}?tab=repositories`;
   const browseURL = pathParam
-    ? (fileQuery.data?.browse_url || treeQuery.data?.browse_url || "")
-    : (treeQuery.data?.browse_url || "");
+    ? (fileIsForCurrentRef && fileQuery.data?.browse_url) ||
+      (treeIsForCurrentRef && treeQuery.data?.browse_url) ||
+      ""
+    : (treeIsForCurrentRef && treeQuery.data?.browse_url) || "";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <CollectionPageHeader
         icon={Library}
         title={t(($) => $.page.title)}
-        description={treeQuery.data?.ref ? treeQuery.data.ref : undefined}
+        description={treeIsForCurrentRef && treeQuery.data?.ref ? treeQuery.data.ref : undefined}
         actions={
           <div className="flex items-center gap-2">
             <BranchPicker
@@ -136,7 +156,7 @@ export function KnowledgePage() {
         }
       />
 
-      {treeQuery.isPending ? (
+      {showTreePending ? (
         <div className="flex min-h-0 flex-1 md:flex-row">
           <div className="space-y-2 border-b border-surface-border p-4 md:w-72 md:border-b-0 md:border-r">
             <Skeleton className="h-6 w-40" />
@@ -148,7 +168,7 @@ export function KnowledgePage() {
             <Skeleton className="mt-4 h-40 w-full" />
           </div>
         </div>
-      ) : notConfigured ? (
+      ) : notConfigured && treeQuery.data === undefined ? (
         <CollectionPageState
           icon={Library}
           title={t(($) => $.empty.not_configured_title)}
@@ -163,7 +183,7 @@ export function KnowledgePage() {
             </Button>
           }
         />
-      ) : treeQuery.isError ? (
+      ) : showTreeError ? (
         <CollectionPageState
           role="alert"
           tone="destructive"
@@ -219,12 +239,12 @@ export function KnowledgePage() {
                   title={t(($) => $.empty.no_file_title)}
                   description={t(($) => $.empty.no_file_description)}
                 />
-              ) : fileQuery.isPending ? (
+              ) : showFilePending ? (
                 <div className="mx-auto max-w-[68ch] px-6 pt-7">
                   <Skeleton className="h-8 w-64" />
                   <Skeleton className="mt-4 h-48 w-full" />
                 </div>
-              ) : fileQuery.isError ? (
+              ) : showFileError ? (
                 <CollectionPageState
                   role="alert"
                   tone="destructive"
