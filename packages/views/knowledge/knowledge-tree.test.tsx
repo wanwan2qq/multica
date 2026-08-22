@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { I18nProvider } from "@multica/core/i18n/react";
 import enKnowledge from "../locales/en/knowledge.json";
@@ -284,5 +284,158 @@ describe("KnowledgeTree", () => {
     );
     expect(screen.getByText("README.md")).toBeTruthy();
     expect(screen.queryByText(/file matches/)).toBeNull();
+  });
+
+  it("skips onChange while an IME is composing", () => {
+    let filter = "";
+    const onFilterChange = (next: string) => {
+      filter = next;
+    };
+    render(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <KnowledgeTree
+          wsId="ws-1"
+          filePaths={SAMPLE_FILES}
+          selectedPath=""
+          onSelect={vi.fn()}
+          filter={filter}
+          onFilterChange={onFilterChange}
+        />
+      </I18nProvider>,
+    );
+    const input = screen.getByLabelText("Filter knowledge base files");
+
+    // Simulate IME keystrokes — each input event has nativeEvent.isComposing
+    // true while the user is mid-pinyin (e.g. typing "zhongwen" for "中").
+    // The handler must NOT propagate these intermediate values.
+    fireEvent.input(input, { target: { value: "z" }, isComposing: true });
+    fireEvent.input(input, { target: { value: "zh" }, isComposing: true });
+    fireEvent.input(input, { target: { value: "zho" }, isComposing: true });
+    fireEvent.input(input, { target: { value: "zhon" }, isComposing: true });
+    expect(filter).toBe("");
+  });
+
+  it("flushes the committed value when IME composition ends", () => {
+    let filter = "";
+    const onFilterChange = (next: string) => {
+      filter = next;
+    };
+    render(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <KnowledgeTree
+          wsId="ws-1"
+          filePaths={SAMPLE_FILES}
+          selectedPath=""
+          onSelect={vi.fn()}
+          filter={filter}
+          onFilterChange={onFilterChange}
+        />
+      </I18nProvider>,
+    );
+    const input = screen.getByLabelText("Filter knowledge base files");
+
+    // Mid-composition keystrokes should be ignored.
+    fireEvent.input(input, { target: { value: "zhongwen" }, isComposing: true });
+    expect(filter).toBe("");
+
+    // When the IME commits, the final value lands via compositionend.
+    fireEvent.compositionEnd(input, { target: { value: "中" } });
+    expect(filter).toBe("中");
+  });
+
+  it("ignores a stale compositionend that arrives after the user clears the field", () => {
+    let filter = "zhongwen";
+    const onFilterChange = (next: string) => {
+      filter = next;
+    };
+    const { rerender } = render(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <KnowledgeTree
+          wsId="ws-1"
+          filePaths={SAMPLE_FILES}
+          selectedPath=""
+          onSelect={vi.fn()}
+          filter={filter}
+          onFilterChange={onFilterChange}
+        />
+      </I18nProvider>,
+    );
+    const input = screen.getByLabelText("Filter knowledge base files");
+
+    // User clears the filter via the X button — the controlled `filter` is
+    // reset to "" and the component re-renders.
+    filter = "";
+    rerender(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <KnowledgeTree
+          wsId="ws-1"
+          filePaths={SAMPLE_FILES}
+          selectedPath=""
+          onSelect={vi.fn()}
+          filter={filter}
+          onFilterChange={onFilterChange}
+        />
+      </I18nProvider>,
+    );
+
+    // Some IMEs fire compositionend with the cancelled partial value AFTER
+    // the user already cleared the field. Because the handler compares
+    // `next === value` and skips when they match, the stale event is
+    // dropped — `filter` stays "".
+    fireEvent.compositionEnd(input, { target: { value: "zhongwen" } });
+    expect(filter).toBe("");
+  });
+
+  it("propagates non-IME typing to the filter", () => {
+    let filter = "";
+    const onFilterChange = (next: string) => {
+      filter = next;
+    };
+    const { rerender } = render(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <KnowledgeTree
+          wsId="ws-1"
+          filePaths={SAMPLE_FILES}
+          selectedPath=""
+          onSelect={vi.fn()}
+          filter={filter}
+          onFilterChange={onFilterChange}
+        />
+      </I18nProvider>,
+    );
+    const input = screen.getByLabelText("Filter knowledge base files");
+
+    fireEvent.input(input, { target: { value: "c" } });
+    expect(filter).toBe("c");
+
+    // Re-render so the component reflects the new filter and the input
+    // receives it as a controlled value (jsdom doesn't update value without
+    // a controlled rerender).
+    rerender(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <KnowledgeTree
+          wsId="ws-1"
+          filePaths={SAMPLE_FILES}
+          selectedPath=""
+          onSelect={vi.fn()}
+          filter={filter}
+          onFilterChange={onFilterChange}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.input(input, { target: { value: "co" } });
+    expect(filter).toBe("co");
+  });
+
+  it("renders the search input with refined sidebar styling", () => {
+    renderTree();
+    const input = screen.getByLabelText("Filter knowledge base files");
+    // h-8 height, refined border + bg pattern from the design plan.
+    expect(input.className).toContain("h-8");
+    expect(input.className).toContain("border-input/50");
+    expect(input.className).toContain("bg-surface-hover");
+    expect(input.className).toContain("focus-visible:border-input");
+    expect(input.className).toContain("focus-visible:bg-background");
   });
 });
