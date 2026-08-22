@@ -47,6 +47,8 @@ function renderTree(
   selectedPath = "",
   onSelect = vi.fn(),
   wsId = "ws-1",
+  filter = "",
+  onFilterChange?: (next: string) => void,
 ) {
   return render(
     <I18nProvider locale="en" resources={TEST_RESOURCES}>
@@ -55,6 +57,8 @@ function renderTree(
         filePaths={SAMPLE_FILES}
         selectedPath={selectedPath}
         onSelect={onSelect}
+        filter={filter}
+        onFilterChange={onFilterChange}
       />
     </I18nProvider>,
   );
@@ -214,5 +218,71 @@ describe("KnowledgeTree", () => {
     // A second workspace starts with no expanded folders.
     renderTree("", vi.fn(), "ws-2");
     expect(screen.queryByText("_overview.md")).toBeNull();
+  });
+
+  it("narrows the tree when a matching filter is passed in", () => {
+    renderTree("", vi.fn(), "ws-1", "config");
+    // Only the matching file is visible — siblings and unrelated branches
+    // are pruned away.
+    expect(screen.getByText("config.json")).toBeTruthy();
+    expect(screen.queryByText("README.md")).toBeNull();
+    expect(screen.queryByText("PRD.md")).toBeNull();
+    expect(screen.getByText(/1 file matches?/)).toBeTruthy();
+  });
+
+  it("auto-expands ancestor folders so deep matches are visible", () => {
+    renderTree("", vi.fn(), "ws-1", "config.json");
+    // The match itself is visible because the prune kept the only dir with
+    // surviving children (02-研发过程/), and the search-driven expanded set
+    // opens its parents without a click.
+    expect(screen.getByText("config.json")).toBeTruthy();
+    // Sibling files outside the pruned subtree are gone.
+    expect(screen.queryByText("README.md")).toBeNull();
+    expect(screen.queryByText("_overview.md")).toBeNull();
+  });
+
+  it("shows a no-match empty state when the filter hits nothing", () => {
+    renderTree("", vi.fn(), "ws-1", "this-does-not-exist-anywhere");
+    expect(screen.getByText("No files match this filter.")).toBeTruthy();
+    expect(screen.queryByText("README.md")).toBeNull();
+  });
+
+  it("clearing the filter restores the prior view", async () => {
+    let filter = "config";
+    const onFilterChange = (next: string) => {
+      filter = next;
+    };
+    const { rerender } = render(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <KnowledgeTree
+          wsId="ws-1"
+          filePaths={SAMPLE_FILES}
+          selectedPath=""
+          onSelect={vi.fn()}
+          filter={filter}
+          onFilterChange={onFilterChange}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByText("config.json")).toBeTruthy();
+    expect(screen.queryByText("README.md")).toBeNull();
+
+    // Simulate clearing the filter — the parent state setter clears and
+    // re-renders with the empty filter, restoring the unfiltered view.
+    filter = "";
+    rerender(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <KnowledgeTree
+          wsId="ws-1"
+          filePaths={SAMPLE_FILES}
+          selectedPath=""
+          onSelect={vi.fn()}
+          filter={filter}
+          onFilterChange={onFilterChange}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByText("README.md")).toBeTruthy();
+    expect(screen.queryByText(/file matches/)).toBeNull();
   });
 });

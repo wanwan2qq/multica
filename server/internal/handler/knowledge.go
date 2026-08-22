@@ -90,7 +90,7 @@ func (h *Handler) GetKnowledgeTree(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ref, entries, err := fetchKnowledgeTreeHTTP(r.Context(), remote)
+	ref, entries, err := fetchKnowledgeTreeHTTP(r.Context(), remote, r.URL.Query().Get("ref"))
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -122,10 +122,14 @@ func (h *Handler) GetKnowledgeFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid path")
 		return
 	}
-	ref, err := resolveDefaultRefHTTP(r.Context(), remote)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
+	ref := strings.TrimSpace(r.URL.Query().Get("ref"))
+	if ref == "" {
+		var err error
+		ref, err = resolveDefaultRefHTTP(r.Context(), remote)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
 	}
 	body, truncated, err := fetchKnowledgeFileHTTP(r.Context(), remote, ref, filePath)
 	if err != nil {
@@ -153,6 +157,33 @@ func (h *Handler) GetKnowledgeFile(w http.ResponseWriter, r *http.Request) {
 		Truncated: truncated,
 		Size:      len(body),
 		Content:   content,
+	})
+}
+
+type knowledgeBranchesResponse struct {
+	Branches      []string `json:"branches"`
+	DefaultBranch string   `json:"default_branch"`
+}
+
+func (h *Handler) GetKnowledgeBranches(w http.ResponseWriter, r *http.Request) {
+	_, remote, ok := h.loadKnowledgeRepo(w, r)
+	if !ok {
+		return
+	}
+	names, def, err := fetchKnowledgeBranchesHTTP(r.Context(), remote)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if names == nil {
+		names = []string{}
+	}
+	if def == "" {
+		def = "main"
+	}
+	writeJSON(w, http.StatusOK, knowledgeBranchesResponse{
+		Branches:      names,
+		DefaultBranch: def,
 	})
 }
 

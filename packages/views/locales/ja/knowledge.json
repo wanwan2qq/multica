@@ -7,7 +7,14 @@
     "expand_all": "すべて展開",
     "collapse_all": "すべて折りたたむ",
     "truncated": "プレビュー上限を超えています。続きは Git で開いてください。",
-    "breadcrumb_aria": "ファイルパス"
+    "breadcrumb_aria": "ファイルパス",
+    "branch_label": "ブランチ",
+    "branch_default": "デフォルト",
+    "branch_aria": "ナレッジベースブランチ",
+    "branch_load_failed": "ブランチを読み込めませんでした — デフォルトを表示中",
+    "search_placeholder": "ファイルを絞り込み…",
+    "search_aria": "ナレッジベースファイルを絞り込み",
+    "search_clear": "フィルターをクリア"
   },
   "empty": {
     "not_configured_title": "ナレッジリポジトリが未設定です",
@@ -19,6 +26,8 @@
     "binary_description": "バイナリはここでは表示しません。Git で開いてください。",
     "html_sandbox_notice": "HTML のプレビューはサンドボックス化されています —— スクリプトとフォームは無効、外部リンクは新しいタブで開きます。",
     "load_error_title": "ナレッジを読み込めませんでした",
-    "load_error_fallback": "Git ホストがツリーを返しませんでした。URL と権限を確認してください。"
+    "load_error_fallback": "Git ホストがツリーを返しませんでした。URL と権限を確認してください。",
+    "no_match": "一致するファイルがありません",
+    "match_count_other": "{{count}} 件のファイルが一致"
   }
 }
