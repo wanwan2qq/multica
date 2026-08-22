@@ -145,10 +145,14 @@ func resolveDefaultRefHTTP(ctx context.Context, remote gitRemote) (string, error
 	return payload.DefaultBranch, nil
 }
 
-func fetchKnowledgeTreeHTTP(ctx context.Context, remote gitRemote) (string, []knowledgeTreeEntry, error) {
-	ref, err := resolveDefaultRefHTTP(ctx, remote)
-	if err != nil {
-		return "", nil, err
+func fetchKnowledgeTreeHTTP(ctx context.Context, remote gitRemote, refOverride string) (string, []knowledgeTreeEntry, error) {
+	ref := strings.TrimSpace(refOverride)
+	if ref == "" {
+		var err error
+		ref, err = resolveDefaultRefHTTP(ctx, remote)
+		if err != nil {
+			return "", nil, err
+		}
 	}
 	if remote.Provider == "gitlab" {
 		entries, err := fetchGitLabTreeHTTP(ctx, remote, ref)
@@ -228,6 +232,86 @@ func fetchGitLabTreeHTTP(ctx context.Context, remote gitRemote, ref string) ([]k
 		page = strings.TrimSpace(resp.Header.Get("X-Next-Page"))
 	}
 	return filterKnowledgeTree(items), nil
+}
+
+func fetchGitLabBranchesHTTP(ctx context.Context, remote gitRemote) ([]string, error) {
+	projectID := url.PathEscape(remote.projectPath())
+	var all []string
+	page := "1"
+	for page != "" && len(all) < 3000 {
+		apiURL := fmt.Sprintf("https://%s/api/v4/projects/%s/repository/branches?per_page=100&page=%s",
+			remote.Host, projectID, url.QueryEscape(page))
+		resp, err := knowledgeGET(ctx, apiURL, remote.Provider, "")
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return nil, fmt.Errorf("failed to list branches (HTTP %d)", resp.StatusCode)
+		}
+		var items []knowledgeBranchItem
+		if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+			resp.Body.Close()
+			return nil, fmt.Errorf("decode branches: %w", err)
+		}
+		resp.Body.Close()
+		for _, it := range items {
+			if strings.TrimSpace(it.Name) != "" {
+				all = append(all, it.Name)
+			}
+		}
+		page = strings.TrimSpace(resp.Header.Get("X-Next-Page"))
+	}
+	return all, nil
+}
+
+type knowledgeBranchItem struct {
+	Name string `json:"name"`
+}
+
+func fetchKnowledgeBranchesHTTP(ctx context.Context, remote gitRemote) ([]string, string, error) {
+	if remote.Provider == "gitlab" {
+		names, err := fetchGitLabBranchesHTTP(ctx, remote)
+		if err != nil {
+			return nil, "", err
+		}
+		def, derr := resolveDefaultRefHTTP(ctx, remote)
+		if derr != nil {
+			return names, "", nil
+		}
+		return names, def, nil
+	}
+	var apiURL string
+	if remote.Provider == "github" {
+		apiURL = fmt.Sprintf("https://api.github.com/repos/%s/%s/branches?per_page=100",
+			url.PathEscape(remote.Owner), url.PathEscape(remote.Repo))
+	} else {
+		apiURL = fmt.Sprintf("https://%s/api/v1/repos/%s/%s/branches?limit=0",
+			remote.Host, url.PathEscape(remote.Owner), url.PathEscape(remote.Repo))
+	}
+	resp, err := knowledgeGET(ctx, apiURL, remote.Provider, "")
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("failed to list branches (HTTP %d)", resp.StatusCode)
+	}
+	var items []knowledgeBranchItem
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+		return nil, "", fmt.Errorf("decode branches: %w", err)
+	}
+	names := make([]string, 0, len(items))
+	for _, it := range items {
+		if strings.TrimSpace(it.Name) != "" {
+			names = append(names, it.Name)
+		}
+	}
+	def, err := resolveDefaultRefHTTP(ctx, remote)
+	if err != nil {
+		return names, "", nil
+	}
+	return names, def, nil
 }
 
 func fetchKnowledgeFileHTTP(ctx context.Context, remote gitRemote, ref, filePath string) ([]byte, bool, error) {

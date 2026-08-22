@@ -381,10 +381,12 @@ import {
   MALFORMED_RUNTIME_MODEL_LIST_REQUEST,
   SkillSchema,
   EMPTY_SKILL,
-  KnowledgeTreeResponseSchema,
+  KnowledgeBranchesResponseSchema,
   KnowledgeFileResponseSchema,
-  EMPTY_KNOWLEDGE_TREE,
+  KnowledgeTreeResponseSchema,
+  EMPTY_KNOWLEDGE_BRANCHES,
   EMPTY_KNOWLEDGE_FILE,
+  EMPTY_KNOWLEDGE_TREE,
   IssueViewSchema,
   IssueViewListSchema,
   IssueViewPreferenceSchema,
@@ -412,7 +414,7 @@ import {
   type IssueViewPreference,
   type CreateIssueViewRequest,
 } from "./schemas";
-import type { KnowledgeFileResponse, KnowledgeTreeResponse } from "../knowledge";
+import type { KnowledgeBranchesResponse, KnowledgeFileResponse, KnowledgeTreeResponse } from "../knowledge";
 
 /** Identifies the calling client to the server.
  *  Sent on every HTTP request as X-Client-Platform / X-Client-Version /
@@ -2308,19 +2310,34 @@ export class ApiClient {
     return this.fetch(`/api/workspaces/${id}`);
   }
 
-  async getKnowledgeTree(workspaceId: string): Promise<KnowledgeTreeResponse> {
-    const raw = await this.fetch<unknown>(`/api/workspaces/${workspaceId}/knowledge/tree`);
+  async getKnowledgeTree(workspaceId: string, ref?: string): Promise<KnowledgeTreeResponse> {
+    const search = new URLSearchParams();
+    const trimmedRef = ref?.trim();
+    if (trimmedRef) search.set("ref", trimmedRef);
+    const qs = search.toString();
+    const url = `/api/workspaces/${workspaceId}/knowledge/tree${qs ? `?${qs}` : ""}`;
+    const raw = await this.fetch<unknown>(url);
     return parseWithFallback(raw, KnowledgeTreeResponseSchema, EMPTY_KNOWLEDGE_TREE, {
       endpoint: "GET /api/workspaces/{id}/knowledge/tree",
     });
   }
 
-  async getKnowledgeFile(workspaceId: string, path: string): Promise<KnowledgeFileResponse> {
+  async getKnowledgeFile(workspaceId: string, path: string, ref?: string): Promise<KnowledgeFileResponse> {
+    const search = new URLSearchParams({ path });
+    const trimmedRef = ref?.trim();
+    if (trimmedRef) search.set("ref", trimmedRef);
     const raw = await this.fetch<unknown>(
-      `/api/workspaces/${workspaceId}/knowledge/file?path=${encodeURIComponent(path)}`,
+      `/api/workspaces/${workspaceId}/knowledge/file?${search.toString()}`,
     );
     return parseWithFallback(raw, KnowledgeFileResponseSchema, EMPTY_KNOWLEDGE_FILE, {
       endpoint: "GET /api/workspaces/{id}/knowledge/file",
+    });
+  }
+
+  async getKnowledgeBranches(workspaceId: string): Promise<KnowledgeBranchesResponse> {
+    const raw = await this.fetch<unknown>(`/api/workspaces/${workspaceId}/knowledge/branches`);
+    return parseWithFallback(raw, KnowledgeBranchesResponseSchema, EMPTY_KNOWLEDGE_BRANCHES, {
+      endpoint: "GET /api/workspaces/{id}/knowledge/branches",
     });
   }
 

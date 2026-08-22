@@ -9,8 +9,13 @@ export type KnowledgeTreeResponse = {
   description: string;
   ref: string;
   browse_url: string;
-  provider: "github" | "gitea";
+  provider: "github" | "gitlab" | "gitea";
   entries: KnowledgeTreeEntry[];
+};
+
+export type KnowledgeBranchesResponse = {
+  branches: string[];
+  default_branch: string;
 };
 
 export type KnowledgeFileResponse = {

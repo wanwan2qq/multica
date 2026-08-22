@@ -85,6 +85,7 @@
     "./plugins/mutations": "./plugins/mutations.ts",
     "./knowledge": "./knowledge/index.ts",
     "./knowledge/queries": "./knowledge/queries.ts",
+    "./knowledge/stores/ref-store": "./knowledge/stores/ref-store.ts",
     "./knowledge/stores/tree-expand-store": "./knowledge/stores/tree-expand-store.ts",
     "./labels": "./labels/index.ts",
     "./labels/queries": "./labels/queries.ts",

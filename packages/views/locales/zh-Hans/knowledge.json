@@ -7,7 +7,14 @@
     "expand_all": "全部展开",
     "collapse_all": "全部折叠",
     "truncated": "文件超过预览大小上限。请到 Git 阅读全文。",
-    "breadcrumb_aria": "文件路径"
+    "breadcrumb_aria": "文件路径",
+    "branch_label": "分支",
+    "branch_default": "默认",
+    "branch_aria": "知识库分支",
+    "branch_load_failed": "无法加载分支 — 使用默认",
+    "search_placeholder": "过滤文件…",
+    "search_aria": "过滤知识库文件",
+    "search_clear": "清除过滤"
   },
   "empty": {
     "not_configured_title": "尚未配置知识库仓库",
@@ -19,6 +26,8 @@
     "binary_description": "二进制文件不在这里展示。请到 Git 打开。",
     "html_sandbox_notice": "HTML 预览在沙箱中渲染 —— 脚本与表单已禁用，外部链接会在新标签页打开。",
     "load_error_title": "无法加载知识库",
-    "load_error_fallback": "Git 托管没有返回目录树。请检查仓库地址和访问权限。"
+    "load_error_fallback": "Git 托管没有返回目录树。请检查仓库地址和访问权限。",
+    "no_match": "没有匹配的文件",
+    "match_count_other": "匹配 {{count}} 个文件"
   }
 }
