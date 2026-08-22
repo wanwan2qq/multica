@@ -60,6 +60,7 @@ const branchesRef = vi.hoisted(() => ({
 const seenKeys = vi.hoisted(() => ({ current: [] as unknown[][] }));
 const searchRef = vi.hoisted(() => ({ current: new URLSearchParams() }));
 const replace = vi.hoisted(() => vi.fn());
+const refByWsRef = vi.hoisted(() => ({ current: {} as Record<string, string> }));
 
 vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-1" }));
 vi.mock("@multica/core/paths", async (importOriginal) => ({
@@ -81,9 +82,13 @@ vi.mock("@multica/core/knowledge/queries", () => ({
 vi.mock("@multica/core/knowledge/stores/ref-store", () => ({
   useRefStore: Object.assign(
     (selector: (s: { refByWs: Record<string, string> }) => unknown) =>
-      selector({ refByWs: {} }),
+      selector({ refByWs: refByWsRef.current }),
     {
-      getState: () => ({ setRef: vi.fn(), resetRef: vi.fn() }),
+      getState: () => ({
+        refByWs: refByWsRef.current,
+        setRef: vi.fn(),
+        resetRef: vi.fn(),
+      }),
       setState: vi.fn(),
     },
   ),
@@ -131,6 +136,7 @@ describe("KnowledgePage", () => {
     replace.mockReset();
     searchRef.current = new URLSearchParams();
     seenKeys.current = [];
+    refByWsRef.current = {};
     globalThis.localStorage?.clear?.();
     useTreeExpandStore.setState({ expandedByWs: {} });
     treeRef.current = {
@@ -174,6 +180,11 @@ describe("KnowledgePage", () => {
 
   it("previews markdown from the remote tree", () => {
     searchRef.current = new URLSearchParams("path=README.md");
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
     treeRef.current = {
       isPending: false,
       isError: false,
@@ -209,6 +220,11 @@ describe("KnowledgePage", () => {
 
   it("renders html files in a sandboxed iframe", () => {
     searchRef.current = new URLSearchParams("path=page.html");
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
     treeRef.current = {
       isPending: false,
       isError: false,
@@ -262,5 +278,104 @@ describe("KnowledgePage", () => {
     // the cache. activeRef resolves to "main" because the user override is
     // empty and branchesQuery.data.default_branch === "main".
     expect(treeKey).toContain("main");
+  });
+
+  it("renders a skeleton instead of stale tree data when activeRef does not match data.ref", () => {
+    // Server has cached a `main` tree (e.g. from a prior mount) but the
+    // user's persisted branch is `dev`. activeRef resolves to "dev" via
+    // useRefStore; treeQuery.data.ref === "main" doesn't match → guard
+    // treats this as "still loading" and renders the skeleton.
+    refByWsRef.current = { "ws-1": "dev" };
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [{ path: "README.md", type: "blob" }],
+      },
+      error: null,
+    };
+    renderPage();
+    // No README.md tab visible — the tree panel is the loading skeleton.
+    expect(screen.queryByRole("tab", { name: /README\.md/ })).toBeNull();
+    // Header description is hidden while we're showing the skeleton.
+    expect(screen.queryByText("main")).toBeNull();
+  });
+
+  it("renders a skeleton instead of stale file data when activeRef does not match", () => {
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
+    searchRef.current = new URLSearchParams("path=README.md");
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [{ path: "README.md", type: "blob" }],
+      },
+      error: null,
+    };
+    // fileRef holds stale data for `main` but the user switched to `dev`.
+    fileRef.current = {
+      isPending: false,
+      isError: false,
+      data: {
+        path: "README.md",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/blob/main/README.md",
+        media: "markdown",
+        truncated: false,
+        size: 8,
+        content: "# Stale main content",
+      },
+      error: null,
+    };
+    refByWsRef.current = { "ws-1": "dev" };
+    renderPage();
+    // The stale main content does NOT appear in the file panel.
+    expect(screen.queryByText("# Stale main content")).toBeNull();
+  });
+
+  it("does not redirect via the auto-default effect until the new ref's tree lands", () => {
+    // First mount: tree data is for `main`, but the user has persisted
+    // `dev` as their override. The auto-redirect effect (which would
+    // otherwise set ?path= to the new ref's overview) must NOT fire
+    // based on the stale main tree.
+    refByWsRef.current = { "ws-1": "dev" };
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [
+          { path: "main-only.md", type: "blob" },
+        ],
+      },
+      error: null,
+    };
+    renderPage();
+    // The page should be in the skeleton state, NOT have navigated to
+    // `?path=main-only.md` based on stale data.
+    expect(replace).not.toHaveBeenCalledWith(
+      expect.stringContaining("path=main-only.md"),
+    );
   });
 });

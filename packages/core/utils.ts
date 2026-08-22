@@ -57,8 +57,12 @@ export function createRequestId(length = 8): string {
 export function isImeComposing(event: {
   isComposing?: boolean;
   keyCode?: number;
-  nativeEvent?: { isComposing?: boolean; keyCode?: number };
+  // React's typed `nativeEvent` (e.g. `Event` on `ChangeEvent`) doesn't
+  // expose `isComposing`/`keyCode` in its type. Accept any object and read
+  // those two fields defensively via runtime checks.
+  nativeEvent?: unknown;
 }): boolean {
-  const e = event.nativeEvent ?? event;
+  const e = (event.nativeEvent ?? event) as { isComposing?: unknown; keyCode?: unknown } | null | undefined;
+  if (!e || typeof e !== "object") return false;
   return Boolean(e.isComposing) || e.keyCode === 229;
 }
