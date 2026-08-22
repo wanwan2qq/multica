@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { AlertCircle, ChevronRight, ExternalLink, FileQuestion, Library } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -11,9 +11,11 @@ import {
   type KnowledgeTreeEntry,
 } from "@multica/core/knowledge";
 import {
+  knowledgeBranchesOptions,
   knowledgeFileOptions,
   knowledgeTreeOptions,
 } from "@multica/core/knowledge/queries";
+import { useRefStore } from "@multica/core/knowledge/stores/ref-store";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { Button } from "@multica/ui/components/ui/button";
 import {
@@ -26,6 +28,7 @@ import { AppLink, useNavigation } from "../navigation";
 import { CollectionPageHeader, CollectionPageState } from "../layout/collection-page";
 import { RichContent } from "../rich-content";
 import { useT } from "../i18n";
+import { BranchPicker } from "./branch-picker";
 import { KnowledgeTree } from "./knowledge-tree";
 import { resolveKnowledgeLinks } from "./resolve-links";
 
@@ -43,13 +46,27 @@ export function KnowledgePage() {
     id: "multica_knowledge_layout",
   });
 
-  const treeQuery = useQuery(knowledgeTreeOptions(wsId));
-  const fileQuery = useQuery(knowledgeFileOptions(wsId, pathParam));
+  // Branch selection: persisted per-workspace in localStorage; empty means
+  // "fall back to whatever the server's default-branch endpoint returns".
+  // The branch picker always re-keys off this value so the server response
+  // can also refresh the picker after the page mounts.
+  const refFromStore = useRefStore((s) => s.refByWs[wsId] ?? "");
+  const branchesQuery = useQuery(knowledgeBranchesOptions(wsId));
+  const defaultBranch = branchesQuery.data?.default_branch ?? "";
+  const activeRef = refFromStore || defaultBranch;
+
+  const treeQuery = useQuery(knowledgeTreeOptions(wsId, activeRef));
+  const fileQuery = useQuery(knowledgeFileOptions(wsId, activeRef, pathParam));
 
   const files = useMemo(
     () => blobPaths(treeQuery.data?.entries ?? []),
     [treeQuery.data?.entries],
   );
+
+  // Ephemeral UI state — only this single component sees it. Resetting it
+  // across workspace/branch switches is the page's job via `key`, not the
+  // input's.
+  const [filter, setFilter] = useState("");
 
   useEffect(() => {
     if (pathParam.length > 0 || !treeQuery.isSuccess) return;
@@ -66,6 +83,22 @@ export function KnowledgePage() {
     replace(`${pathname}?${params.toString()}`);
   };
 
+  // Switching branches can orphan the currently selected path (it might
+  // not exist on the new ref). Clear ?path= before the new tree/file
+  // fetches so the user isn't briefly pointed at a dead link, and let
+  // the auto-redirect above land them on the new ref's overview.
+  const handleBranchChange = useCallback(
+    (next: string) => {
+      useRefStore.getState().setRef(wsId, next);
+      if (pathParam.length > 0) {
+        const params = new URLSearchParams(searchParams);
+        params.delete("path");
+        replace(`${pathname}?${params.toString()}`);
+      }
+    },
+    [wsId, pathname, searchParams, replace, pathParam],
+  );
+
   const notConfigured = errorCode(treeQuery.error) === "knowledge_repo_not_configured";
   const reposHref = `${p.settings()}?tab=repositories`;
   const browseURL = pathParam
@@ -79,19 +112,27 @@ export function KnowledgePage() {
         title={t(($) => $.page.title)}
         description={treeQuery.data?.ref ? treeQuery.data.ref : undefined}
         actions={
-          browseURL ? (
-            <Button
-              variant="outline"
-              size="sm"
-              render={
-                <a href={browseURL} target="_blank" rel="noopener noreferrer" />
-              }
-              nativeButton={false}
-            >
-              <ExternalLink className="size-3.5" />
-              {t(($) => $.page.open_in_git)}
-            </Button>
-          ) : null
+          <div className="flex items-center gap-2">
+            <BranchPicker
+              wsId={wsId}
+              value={refFromStore}
+              onChange={handleBranchChange}
+              disabled={!treeQuery.isSuccess && !branchesQuery.isSuccess}
+            />
+            {browseURL ? (
+              <Button
+                variant="outline"
+                size="sm"
+                render={
+                  <a href={browseURL} target="_blank" rel="noopener noreferrer" />
+                }
+                nativeButton={false}
+              >
+                <ExternalLink className="size-3.5" />
+                {t(($) => $.page.open_in_git)}
+              </Button>
+            ) : null}
+          </div>
         }
       />
 
@@ -158,10 +199,13 @@ export function KnowledgePage() {
                 </p>
               ) : (
                 <KnowledgeTree
+                  key={`${wsId}:${activeRef}`}
                   wsId={wsId}
                   filePaths={files}
                   selectedPath={pathParam}
                   onSelect={selectPath}
+                  filter={filter}
+                  onFilterChange={setFilter}
                 />
               )}
             </aside>

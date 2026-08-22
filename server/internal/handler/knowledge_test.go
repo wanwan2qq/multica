@@ -108,7 +108,7 @@ func TestFetchKnowledgeTreeAndFileHTTP(t *testing.T) {
 	})}
 
 	remote := gitRemote{Host: "github.com", Owner: "acme", Repo: "kb", Provider: "github"}
-	ref, entries, err := fetchKnowledgeTreeHTTP(context.Background(), remote)
+	ref, entries, err := fetchKnowledgeTreeHTTP(context.Background(), remote, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestFetchGitLabKnowledgeTreeAndFileHTTP(t *testing.T) {
 	})}
 
 	remote := gitRemote{Host: "git.lianjia.com", Owner: "lft/lft-account", Repo: "byz_workspace", Provider: "gitlab"}
-	ref, entries, err := fetchKnowledgeTreeHTTP(context.Background(), remote)
+	ref, entries, err := fetchKnowledgeTreeHTTP(context.Background(), remote, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,6 +167,175 @@ func TestFetchGitLabKnowledgeTreeAndFileHTTP(t *testing.T) {
 	}
 	if truncated || string(body) != "# 贝易转" {
 		t.Fatalf("file: truncated=%v body=%q", truncated, body)
+	}
+}
+
+func TestFetchKnowledgeBranchesHTTP(t *testing.T) {
+	prev := knowledgeHTTPClient
+	t.Cleanup(func() { knowledgeHTTPClient = prev })
+	knowledgeHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		path := req.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/repos/acme/kb/branches"):
+			return jsonResponse(http.StatusOK, `[{"name":"main"},{"name":"feature/x"}]`), nil
+		case strings.HasSuffix(path, "/repos/acme/kb") && !strings.Contains(path, "/git/") && !strings.Contains(path, "/contents/") && !strings.Contains(path, "/branches"):
+			return jsonResponse(http.StatusOK, `{"default_branch":"main"}`), nil
+		default:
+			return jsonResponse(http.StatusNotFound, `{"message":"nope"}`), nil
+		}
+	})}
+
+	remote := gitRemote{Host: "github.com", Owner: "acme", Repo: "kb", Provider: "github"}
+	names, def, err := fetchKnowledgeBranchesHTTP(context.Background(), remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if def != "main" || len(names) != 2 || names[0] != "main" || names[1] != "feature/x" {
+		t.Fatalf("branches: def=%s names=%+v", def, names)
+	}
+}
+
+func TestFetchGitLabBranchesPaginates(t *testing.T) {
+	t.Setenv("KNOWLEDGE_GIT_TOKEN", "glpat-test")
+	prev := knowledgeHTTPClient
+	t.Cleanup(func() { knowledgeHTTPClient = prev })
+	knowledgeHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Header.Get("PRIVATE-TOKEN") != "glpat-test" {
+			t.Errorf("expected PRIVATE-TOKEN, got %q", req.Header.Get("PRIVATE-TOKEN"))
+		}
+		escaped := req.URL.EscapedPath()
+		switch {
+		case strings.Contains(escaped, "/repository/branches"):
+			page := req.URL.Query().Get("page")
+			if page == "1" {
+				resp := jsonResponse(http.StatusOK, `[{"name":"main"},{"name":"dev"}]`)
+				resp.Header.Set("X-Next-Page", "2")
+				return resp, nil
+			}
+			return jsonResponse(http.StatusOK, `[{"name":"feature/x"}]`), nil
+		case strings.Contains(escaped, "/api/v4/projects/lft%2Flft-account%2Fbyz_workspace") && !strings.Contains(escaped, "/repository/"):
+			return jsonResponse(http.StatusOK, `{"default_branch":"master"}`), nil
+		default:
+			return jsonResponse(http.StatusNotFound, `{"message":"nope"}`), nil
+		}
+	})}
+
+	remote := gitRemote{Host: "git.lianjia.com", Owner: "lft/lft-account", Repo: "byz_workspace", Provider: "gitlab"}
+	names, def, err := fetchKnowledgeBranchesHTTP(context.Background(), remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if def != "master" || len(names) != 3 || names[2] != "feature/x" {
+		t.Fatalf("branches: def=%s names=%+v", def, names)
+	}
+}
+
+func TestFetchKnowledgeBranchesAuthFailure(t *testing.T) {
+	prev := knowledgeHTTPClient
+	t.Cleanup(func() { knowledgeHTTPClient = prev })
+	knowledgeHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusUnauthorized, `{"message":"auth required"}`), nil
+	})}
+
+	remote := gitRemote{Host: "github.com", Owner: "acme", Repo: "kb", Provider: "github"}
+	_, _, err := fetchKnowledgeBranchesHTTP(context.Background(), remote)
+	if err == nil {
+		t.Fatal("expected error on 401 response")
+	}
+}
+
+func TestFetchKnowledgeTreeWithRefOverride(t *testing.T) {
+	var defaultRefCalled bool
+	prev := knowledgeHTTPClient
+	t.Cleanup(func() { knowledgeHTTPClient = prev })
+	knowledgeHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		path := req.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/repos/acme/kb") && !strings.Contains(path, "/git/") && !strings.Contains(path, "/contents/") && !strings.Contains(path, "/branches"):
+			defaultRefCalled = true
+			return jsonResponse(http.StatusOK, `{"default_branch":"main"}`), nil
+		case strings.Contains(path, "/git/trees/dev"):
+			if !strings.Contains(req.URL.RawQuery, "recursive=1") {
+				t.Errorf("expected recursive=1, got %q", req.URL.RawQuery)
+			}
+			return jsonResponse(http.StatusOK, `{"tree":[{"path":"dev.md","type":"blob","size":3}]}`), nil
+		default:
+			return jsonResponse(http.StatusNotFound, `{"message":"nope"}`), nil
+		}
+	})}
+
+	remote := gitRemote{Host: "github.com", Owner: "acme", Repo: "kb", Provider: "github"}
+	ref, entries, err := fetchKnowledgeTreeHTTP(context.Background(), remote, "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref != "dev" || len(entries) != 1 || entries[0].Path != "dev.md" {
+		t.Fatalf("tree: ref=%s entries=%+v", ref, entries)
+	}
+	if defaultRefCalled {
+		t.Fatal("resolveDefaultRefHTTP should not be called when ref override is provided")
+	}
+}
+
+func TestFetchGitLabTreeWithRefOverride(t *testing.T) {
+	var defaultRefCalled bool
+	t.Setenv("KNOWLEDGE_GIT_TOKEN", "glpat-test")
+	prev := knowledgeHTTPClient
+	t.Cleanup(func() { knowledgeHTTPClient = prev })
+	knowledgeHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		escaped := req.URL.EscapedPath()
+		switch {
+		case strings.Contains(escaped, "/api/v4/projects/lft%2Flft-account%2Fbyz_workspace") && !strings.Contains(escaped, "/repository/"):
+			defaultRefCalled = true
+			return jsonResponse(http.StatusOK, `{"default_branch":"master"}`), nil
+		case strings.Contains(escaped, "/repository/tree"):
+			if req.URL.Query().Get("ref") != "dev" {
+				t.Errorf("expected ref=dev, got %q", req.URL.Query().Get("ref"))
+			}
+			return jsonResponse(http.StatusOK, `[{"path":"dev.md","type":"blob"}]`), nil
+		default:
+			return jsonResponse(http.StatusNotFound, `{"message":"nope"}`), nil
+		}
+	})}
+
+	remote := gitRemote{Host: "git.lianjia.com", Owner: "lft/lft-account", Repo: "byz_workspace", Provider: "gitlab"}
+	ref, entries, err := fetchKnowledgeTreeHTTP(context.Background(), remote, "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref != "dev" || len(entries) != 1 || entries[0].Path != "dev.md" {
+		t.Fatalf("tree: ref=%s entries=%+v", ref, entries)
+	}
+	if defaultRefCalled {
+		t.Fatal("resolveDefaultRefHTTP should not be called when ref override is provided")
+	}
+}
+
+func TestFetchKnowledgeFileWithRefOverride(t *testing.T) {
+	prev := knowledgeHTTPClient
+	t.Cleanup(func() { knowledgeHTTPClient = prev })
+	knowledgeHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		path := req.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/repos/acme/kb") && !strings.Contains(path, "/git/") && !strings.Contains(path, "/contents/") && !strings.Contains(path, "/branches"):
+			return jsonResponse(http.StatusOK, `{"default_branch":"main"}`), nil
+		case strings.Contains(path, "/contents/DEV.md"):
+			if req.URL.Query().Get("ref") != "dev" {
+				t.Errorf("expected ref=dev, got %q", req.URL.Query().Get("ref"))
+			}
+			return textResponse(http.StatusOK, "# dev branch"), nil
+		default:
+			return jsonResponse(http.StatusNotFound, `{"message":"nope"}`), nil
+		}
+	})}
+
+	remote := gitRemote{Host: "github.com", Owner: "acme", Repo: "kb", Provider: "github"}
+	body, _, err := fetchKnowledgeFileHTTP(context.Background(), remote, "dev", "DEV.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "# dev branch" {
+		t.Fatalf("file body=%q", body)
 	}
 }
 

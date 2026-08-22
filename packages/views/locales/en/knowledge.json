@@ -7,7 +7,14 @@
     "expand_all": "Expand all",
     "collapse_all": "Collapse all",
     "truncated": "This file is larger than the preview limit. Open it in Git to read the rest.",
-    "breadcrumb_aria": "File path"
+    "breadcrumb_aria": "File path",
+    "branch_label": "Branch",
+    "branch_default": "default",
+    "branch_aria": "Knowledge base branch",
+    "branch_load_failed": "Couldn't load branches — showing default",
+    "search_placeholder": "Filter files…",
+    "search_aria": "Filter knowledge base files",
+    "search_clear": "Clear filter"
   },
   "empty": {
     "not_configured_title": "No knowledge repository",
@@ -19,6 +26,9 @@
     "binary_description": "Binary files aren't shown here. Open the file in Git instead.",
     "html_sandbox_notice": "HTML preview is sandboxed — scripts and forms are disabled, external links open in a new tab.",
     "load_error_title": "Couldn't load the knowledge base",
-    "load_error_fallback": "The Git host didn't return this tree. Check the repository URL and access."
+    "load_error_fallback": "The Git host didn't return this tree. Check the repository URL and access.",
+    "no_match": "No files match this filter.",
+    "match_count_one": "{{count}} file matches",
+    "match_count_other": "{{count}} files match"
   }
 }

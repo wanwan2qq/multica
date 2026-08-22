@@ -15,8 +15,11 @@ import {
   FolderOpen,
   ChevronsDownUp,
   ChevronsUpDown,
+  Search,
+  X,
 } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
+import { Input } from "@multica/ui/components/ui/input";
 import { useT } from "../i18n";
 import { useTreeExpandStore, type TreeExpandStore } from "@multica/core/knowledge/stores/tree-expand-store";
 
@@ -276,22 +279,49 @@ export function KnowledgeTree({
   filePaths,
   selectedPath,
   onSelect,
+  filter = "",
+  onFilterChange,
 }: {
   wsId: string;
   filePaths: string[];
   selectedPath: string;
   onSelect: (path: string) => void;
+  /** Lowercased substring matched against the full file path. */
+  filter?: string;
+  /** Called when the user types or clears the filter input. */
+  onFilterChange?: (next: string) => void;
 }) {
   const { t } = useT("knowledge");
-  const tree = useMemo(() => buildTree(filePaths), [filePaths]);
+  const normalizedFilter = filter.trim().toLowerCase();
 
-  // Persisted, workspace-scoped set of expanded folder paths. New dirs that
-  // arrive in later fetches default to collapsed — only paths the user has
-  // explicitly opened are stored.
+  // When the filter is non-empty, prune the tree to only paths whose
+  // descendants (or themselves) match. A returned empty list means "no
+  // matches — show the empty state".
+  const tree = useMemo(() => {
+    const full = buildTree(filePaths);
+    if (normalizedFilter.length === 0) return full;
+    const pruned = pruneTree(full, normalizedFilter);
+    return pruned;
+  }, [filePaths, normalizedFilter]);
+
+  // Auto-expand: every ancestor of a match becomes expanded so a hit inside
+  // a collapsed directory is actually visible. Persisted expand state is
+  // unioned with this set so a user who already expanded the folder stays
+  // expanded when the filter is cleared.
   const expandedList = useTreeExpandStore(
     (s: TreeExpandStore) => s.expandedByWs[wsId] ?? EMPTY_ARRAY,
   );
-  const expanded = useMemo(() => new Set(expandedList), [expandedList]);
+  const searchExpanded = useMemo(() => {
+    if (normalizedFilter.length === 0) return null;
+    return ancestorDirsForMatches(filePaths, normalizedFilter);
+  }, [filePaths, normalizedFilter]);
+  const expanded = useMemo(() => {
+    const base = new Set(expandedList);
+    if (searchExpanded) {
+      for (const dir of searchExpanded) base.add(dir);
+    }
+    return base;
+  }, [expandedList, searchExpanded]);
 
   const allDirs = useMemo(() => collectAllDirs(tree), [tree]);
   const allExpanded = allDirs.size > 0 && expanded.size === allDirs.size;
@@ -314,7 +344,36 @@ export function KnowledgeTree({
     [expanded],
   );
 
+  // Count matches across the original file list so the message reflects
+  // every hit, not just those visible above the fold.
+  const matchCount = useMemo(() => {
+    if (normalizedFilter.length === 0) return 0;
+    let n = 0;
+    for (const p of filePaths) {
+      if (p.toLowerCase().includes(normalizedFilter)) n++;
+    }
+    return n;
+  }, [filePaths, normalizedFilter]);
+
+  // Filter applied but produced no matches — render the no-match empty
+  // state instead of an empty tree so the user gets explicit feedback.
   if (tree.length === 0) {
+    if (normalizedFilter.length > 0) {
+      return (
+        <div className="flex flex-col gap-2">
+          <SearchInput
+            value={filter}
+            onChange={(v) => onFilterChange?.(v)}
+            placeholder={t(($) => $.page.search_placeholder)}
+            ariaLabel={t(($) => $.page.search_aria)}
+            clearLabel={t(($) => $.page.search_clear)}
+          />
+          <p className="px-2.5 py-6 text-caption text-muted-foreground">
+            {t(($) => $.empty.no_match)}
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
         <FolderOpen className="h-5 w-5 text-faint-foreground" />
@@ -325,14 +384,18 @@ export function KnowledgeTree({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="flex items-center justify-between px-2.5 pb-1.5">
+      <div className="flex items-center justify-between gap-2 px-2.5 pb-1.5">
         <span className="text-[11px] font-medium text-faint-foreground uppercase tracking-wider">
           {t(($) => $.page.tree_title)}
         </span>
         <button
           type="button"
           onClick={toggleAll}
-          className="rounded p-0.5 text-faint-foreground hover:text-foreground transition-colors"
+          disabled={normalizedFilter.length > 0}
+          className={cn(
+            "rounded p-0.5 text-faint-foreground hover:text-foreground transition-colors",
+            normalizedFilter.length > 0 && "pointer-events-none opacity-0",
+          )}
           aria-label={allExpanded ? t(($) => $.page.collapse_all) : t(($) => $.page.expand_all)}
           title={allExpanded ? t(($) => $.page.collapse_all) : t(($) => $.page.expand_all)}
         >
@@ -343,6 +406,20 @@ export function KnowledgeTree({
           )}
         </button>
       </div>
+      <SearchInput
+        value={filter}
+        onChange={(v) => onFilterChange?.(v)}
+        placeholder={t(($) => $.page.search_placeholder)}
+        ariaLabel={t(($) => $.page.search_aria)}
+        clearLabel={t(($) => $.page.search_clear)}
+      />
+      {normalizedFilter.length > 0 && (
+        <p className="px-2.5 pb-1.5 text-caption text-muted-foreground">
+          {matchCount === 0
+            ? t(($) => $.empty.no_match)
+            : t(($) => $.empty.match_count, { count: matchCount })}
+        </p>
+      )}
       {tree.map((node) => (
         <TreeNodeItem
           key={node.path}
@@ -354,6 +431,46 @@ export function KnowledgeTree({
           onToggle={toggle}
         />
       ))}
+    </div>
+  );
+}
+
+function SearchInput({
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+  clearLabel,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  placeholder: string;
+  ariaLabel: string;
+  clearLabel: string;
+}) {
+  const hasValue = value.length > 0;
+  return (
+    <div className="relative px-2.5 pb-1.5">
+      <Search className="pointer-events-none absolute top-1/2 left-3.5 h-3 w-3 -translate-y-1/2 text-faint-foreground" />
+      <Input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        className="h-7 pl-7 pr-7 text-caption"
+      />
+      {hasValue && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          aria-label={clearLabel}
+          title={clearLabel}
+          className="absolute top-1/2 right-3.5 -translate-y-1/2 rounded p-0.5 text-faint-foreground hover:text-foreground transition-colors"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
     </div>
   );
 }
@@ -370,4 +487,42 @@ function collectAllDirs(nodes: TreeNode[]): Set<string> {
   }
   walk(nodes);
   return paths;
+}
+
+/**
+ * For every path in `filePaths` that matches `filter`, collect every
+ * ancestor directory. Returned as a set so the caller can union it with
+ * the persisted expand state without worrying about duplicates.
+ */
+function ancestorDirsForMatches(filePaths: string[], filter: string): Set<string> {
+  const dirs = new Set<string>();
+  for (const p of filePaths) {
+    if (!p.toLowerCase().includes(filter)) continue;
+    const parts = p.split("/");
+    for (let i = 1; i < parts.length; i++) {
+      dirs.add(parts.slice(0, i).join("/"));
+    }
+  }
+  return dirs;
+}
+
+/**
+ * Keep only nodes whose path contains the filter (for files) or that have
+ * at least one surviving descendant (for directories). Directories with no
+ * surviving descendants are pruned so the user only sees paths that could
+ * possibly lead to a match.
+ */
+function pruneTree(nodes: TreeNode[], filter: string): TreeNode[] {
+  const out: TreeNode[] = [];
+  for (const n of nodes) {
+    if (n.isDirectory) {
+      const kept = pruneTree(n.children, filter);
+      if (kept.length > 0) {
+        out.push({ ...n, children: kept });
+      }
+    } else if (n.path.toLowerCase().includes(filter)) {
+      out.push(n);
+    }
+  }
+  return out;
 }
