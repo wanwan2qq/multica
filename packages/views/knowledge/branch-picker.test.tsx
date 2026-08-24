@@ -99,4 +99,16 @@ describe("BranchPicker", () => {
     await user.click(screen.getByLabelText("Knowledge base branch"));
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("renders long branch names without clipping the dropdown width", async () => {
+    const longBranch = "feature/50542637-beiyizhuanknowledge";
+    branchesRef.current = {
+      branches: ["main", longBranch],
+      default_branch: "main",
+    };
+    const user = userEvent.setup();
+    renderPicker("");
+    await user.click(screen.getByLabelText("Knowledge base branch"));
+    expect(screen.getByText(longBranch)).toBeTruthy();
+  });
 });

@@ -218,7 +218,7 @@ describe("KnowledgePage", () => {
     expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
   });
 
-  it("renders html files in a sandboxed iframe", () => {
+  it("renders html files in a full iframe without sandbox", () => {
     searchRef.current = new URLSearchParams("path=page.html");
     branchesRef.current = {
       isPending: false,
@@ -256,12 +256,11 @@ describe("KnowledgePage", () => {
     renderPage();
     const iframe = document.querySelector("iframe");
     expect(iframe).toBeTruthy();
-    expect(iframe?.getAttribute("sandbox")).toBe("allow-popups");
+    expect(iframe?.getAttribute("sandbox")).toBeNull();
     expect(iframe?.getAttribute("title")).toBe("page.html");
     expect(iframe?.getAttribute("srcDoc")).toContain("Hello HTML");
-    expect(
-      screen.getByText(/HTML preview is sandboxed/),
-    ).toBeTruthy();
+    expect(screen.queryByText(/HTML preview is sandboxed/)).toBeNull();
+    expect(screen.queryByText(/沙箱/)).toBeNull();
   });
 
   it("passes wsId + activeRef into the knowledge tree query key", () => {
@@ -303,7 +302,8 @@ describe("KnowledgePage", () => {
     renderPage();
     // No README.md tab visible — the tree panel is the loading skeleton.
     expect(screen.queryByRole("tab", { name: /README\.md/ })).toBeNull();
-    // Header description is hidden while we're showing the skeleton.
+    // Header shows the target branch while the new tree is loading.
+    expect(screen.getAllByText("dev").length).toBeGreaterThan(0);
     expect(screen.queryByText("main")).toBeNull();
   });
 
