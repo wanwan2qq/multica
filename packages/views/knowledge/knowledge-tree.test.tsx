@@ -428,14 +428,41 @@ describe("KnowledgeTree", () => {
     expect(filter).toBe("co");
   });
 
+  it("keeps the visible draft while an IME is composing", () => {
+    let filter = "";
+    const onFilterChange = (next: string) => {
+      filter = next;
+    };
+    render(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <KnowledgeTree
+          wsId="ws-1"
+          filePaths={SAMPLE_FILES}
+          selectedPath=""
+          onSelect={vi.fn()}
+          filter={filter}
+          onFilterChange={onFilterChange}
+        />
+      </I18nProvider>,
+    );
+    const input = screen.getByLabelText("Filter knowledge base files") as HTMLInputElement;
+
+    fireEvent.compositionStart(input);
+    fireEvent.input(input, { target: { value: "zhong" }, isComposing: true });
+    expect(filter).toBe("");
+    expect(input.value).toBe("zhong");
+
+    fireEvent.compositionEnd(input, { target: { value: "中" } });
+    expect(filter).toBe("中");
+    expect(input.value).toBe("中");
+  });
+
   it("renders the search input with refined sidebar styling", () => {
     renderTree();
     const input = screen.getByLabelText("Filter knowledge base files");
-    // h-8 height, refined border + bg pattern from the design plan.
-    expect(input.className).toContain("h-8");
-    expect(input.className).toContain("border-input/50");
-    expect(input.className).toContain("bg-surface-hover");
-    expect(input.className).toContain("focus-visible:border-input");
-    expect(input.className).toContain("focus-visible:bg-background");
+    expect(input.className).toContain("h-7");
+    expect(input.className).toContain("border-0");
+    expect(input.className).toContain("bg-muted/50");
+    expect(input.className).toContain("focus-visible:ring-1");
   });
 });

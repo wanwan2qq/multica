@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
 import { AlertCircle, ChevronRight, ExternalLink, FileQuestion, Library } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -72,6 +72,7 @@ export function KnowledgePage() {
   const showTreeError = treeQuery.isError && treeIsForCurrentRef;
   const showFilePending = fileQuery.isPending || hasStaleFileData;
   const showFileError = fileQuery.isError && fileIsForCurrentRef;
+  const showInitialTreeLoad = showTreePending && !treeQuery.data;
 
   const files = useMemo(
     () => blobPaths(treeQuery.data?.entries ?? []),
@@ -130,7 +131,7 @@ export function KnowledgePage() {
       <CollectionPageHeader
         icon={Library}
         title={t(($) => $.page.title)}
-        description={treeIsForCurrentRef && treeQuery.data?.ref ? treeQuery.data.ref : undefined}
+        description={activeRef || undefined}
         actions={
           <div className="flex items-center gap-2">
             <BranchPicker
@@ -156,7 +157,7 @@ export function KnowledgePage() {
         }
       />
 
-      {showTreePending ? (
+      {showInitialTreeLoad ? (
         <div className="flex min-h-0 flex-1 md:flex-row">
           <div className="space-y-2 border-b border-surface-border p-4 md:w-72 md:border-b-0 md:border-r">
             <Skeleton className="h-6 w-40" />
@@ -213,7 +214,14 @@ export function KnowledgePage() {
               className="h-full overflow-y-auto border-r border-surface-border p-3 md:p-4"
               aria-label={t(($) => $.page.tree_aria)}
             >
-              {files.length === 0 ? (
+              {showTreePending ? (
+                <div className="space-y-2 px-1">
+                  <Skeleton className="h-7 w-full" />
+                  <Skeleton className="h-7 w-5/6" />
+                  <Skeleton className="h-7 w-4/6" />
+                  <Skeleton className="h-7 w-full" />
+                </div>
+              ) : files.length === 0 ? (
                 <p className="px-2.5 py-2 text-caption text-muted-foreground">
                   {t(($) => $.empty.no_file_description)}
                 </p>
@@ -322,6 +330,42 @@ function KnowledgeBreadcrumb({
   );
 }
 
+function HtmlPreview({ content, title }: { content: string; title: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(720);
+
+  // Expand the iframe to the document height so the full page renders in the
+  // parent scroll area instead of a cramped inner viewport.
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const syncHeight = () => {
+      const doc = iframe.contentDocument;
+      if (!doc) return;
+      const next = Math.max(
+        doc.documentElement?.scrollHeight ?? 0,
+        doc.body?.scrollHeight ?? 0,
+        480,
+      );
+      setHeight(next);
+    };
+
+    iframe.addEventListener("load", syncHeight);
+    return () => iframe.removeEventListener("load", syncHeight);
+  }, [content]);
+
+  return (
+    <iframe
+      ref={iframeRef}
+      srcDoc={content}
+      title={title}
+      className="w-full border-0 bg-background"
+      style={{ height }}
+    />
+  );
+}
+
 function KnowledgeFileBody({
   currentPath,
   media,
@@ -380,17 +424,7 @@ function KnowledgeFileBody({
           <RichContent content={resolvedContent} density="document" phase="settled" />
         </div>
       ) : media === "html" ? (
-        <div className="flex h-full min-h-0 flex-col">
-          <iframe
-            srcDoc={resolvedContent}
-            sandbox="allow-popups"
-            title={currentPath}
-            className="min-h-[60vh] w-full flex-1 border-0 bg-background"
-          />
-          <p className="border-t border-surface-border px-6 py-2 text-caption text-muted-foreground">
-            {t(($) => $.empty.html_sandbox_notice)}
-          </p>
-        </div>
+        <HtmlPreview content={resolvedContent} title={currentPath} />
       ) : (
         <pre className="mx-auto max-w-[80ch] overflow-x-auto px-6 py-7 font-mono text-caption leading-relaxed text-foreground">
           {resolvedContent}
