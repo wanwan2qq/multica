@@ -10,6 +10,7 @@ import enCommon from "../locales/en/common.json";
 import enKnowledge from "../locales/en/knowledge.json";
 import enSkills from "../locales/en/skills.json";
 import { useTreeExpandStore } from "@multica/core/knowledge/stores/tree-expand-store";
+import { useKnowledgePathStore } from "@multica/core/knowledge/stores/knowledge-path-store";
 import { NavigationProvider, type NavigationAdapter } from "../navigation";
 import { KnowledgePage } from "./knowledge-page";
 
@@ -139,6 +140,7 @@ describe("KnowledgePage", () => {
     refByWsRef.current = {};
     globalThis.localStorage?.clear?.();
     useTreeExpandStore.setState({ expandedByWs: {} });
+    useKnowledgePathStore.setState({ pathByWs: {} });
     treeRef.current = {
       isPending: false,
       isError: false,
@@ -347,6 +349,102 @@ describe("KnowledgePage", () => {
     renderPage();
     // The stale main content does NOT appear in the file panel.
     expect(screen.queryByText("# Stale main content")).toBeNull();
+  });
+
+  it("restores the last opened file when the URL drops ?path= on re-entry", () => {
+    // Sidebar re-entry / refresh navigates to the bare knowledge path, so the
+    // URL no longer carries ?path=. The auto-redirect must restore the file
+    // the user last opened from the persisted store rather than the overview.
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [
+          { path: "notes/foo.md", type: "blob" },
+          { path: "README.md", type: "blob" },
+        ],
+      },
+      error: null,
+    };
+    useKnowledgePathStore.setState({ pathByWs: { "ws-1": "notes/foo.md" } });
+    renderPage();
+    // URLSearchParams encodes the slash in the path (notes%2Ffoo.md); the
+    // server decodes it back to notes/foo.md.
+    expect(replace).toHaveBeenCalledWith(
+      expect.stringContaining("path=notes%2Ffoo.md"),
+    );
+    // It must NOT have fallen back to the root README overview.
+    expect(replace).not.toHaveBeenCalledWith(
+      expect.stringContaining("path=README.md"),
+    );
+  });
+
+  it("falls back to the default overview when the stored path is gone on the current ref", () => {
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [{ path: "README.md", type: "blob" }],
+      },
+      error: null,
+    };
+    useKnowledgePathStore.setState({ pathByWs: { "ws-1": "gone.md" } });
+    renderPage();
+    expect(replace).toHaveBeenCalledWith(
+      expect.stringContaining("path=README.md"),
+    );
+  });
+
+  it("does not wipe ?path= when the URL already carries it", () => {
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [{ path: "bar.md", type: "blob" }],
+      },
+      error: null,
+    };
+    searchRef.current = new URLSearchParams("path=bar.md");
+    useKnowledgePathStore.setState({ pathByWs: { "ws-1": "foo.md" } });
+    renderPage();
+    // The URL is intact, so the auto-redirect effect must stay silent — it
+    // should not replace it with the stored path or the overview.
+    expect(replace).not.toHaveBeenCalledWith(
+      expect.stringContaining("path="),
+    );
   });
 
   it("does not redirect via the auto-default effect until the new ref's tree lands", () => {
