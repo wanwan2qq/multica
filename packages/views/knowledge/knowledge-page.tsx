@@ -255,7 +255,7 @@ export function KnowledgePage() {
                   description={t(($) => $.empty.no_file_description)}
                 />
               ) : showFilePending ? (
-                <div className="mx-auto max-w-[68ch] px-6 pt-7">
+                <div className="mx-auto max-w-[76ch] px-6 pt-7">
                   <Skeleton className="h-8 w-64" />
                   <Skeleton className="mt-4 h-48 w-full" />
                 </div>
@@ -427,7 +427,7 @@ function KnowledgeFileBody({
         </p>
       ) : null}
       {media === "markdown" ? (
-        <div className="mx-auto max-w-[68ch] px-6 pb-24 pt-7 sm:px-8">
+        <div className="mx-auto max-w-[76ch] px-6 pb-24 pt-7 sm:px-8">
           <RichContent content={resolvedContent} density="document" phase="settled" />
         </div>
       ) : media === "html" ? (
