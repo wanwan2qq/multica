@@ -11,6 +11,9 @@ services:
         VERSION: ${VERSION:-dev}
         COMMIT: ${COMMIT:-unknown}
         DATE: ${DATE:-unknown}
+        # Optional overrides (see docker-compose.selfhost.build.china.yml)
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+        GOSUMDB: ${GOSUMDB:-sum.golang.org}
 
   frontend:
     image: multica-web:dev
@@ -19,3 +22,5 @@ services:
       dockerfile: Dockerfile.web
       args:
         NEXT_PUBLIC_APP_VERSION: dev
+        COREPACK_NPM_REGISTRY: ${COREPACK_NPM_REGISTRY:-https://registry.npmjs.org}
+        npm_config_registry: ${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}

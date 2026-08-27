@@ -1,6 +1,14 @@
 # --- Dependencies ---
 FROM node:22-alpine AS deps
 
+# Override at build time for restricted networks, e.g.:
+#   --build-arg COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
+#   --build-arg npm_config_registry=https://registry.npmmirror.com
+ARG COREPACK_NPM_REGISTRY=https://registry.npmjs.org
+ARG npm_config_registry=https://registry.npmjs.org
+ENV COREPACK_NPM_REGISTRY=${COREPACK_NPM_REGISTRY}
+ENV npm_config_registry=${npm_config_registry}
+
 WORKDIR /app
 
 # Copy workspace config and all package.json files for dependency resolution
@@ -21,6 +29,11 @@ RUN pnpm install --frozen-lockfile
 
 # --- Build ---
 FROM node:22-alpine AS builder
+
+ARG COREPACK_NPM_REGISTRY=https://registry.npmjs.org
+ARG npm_config_registry=https://registry.npmjs.org
+ENV COREPACK_NPM_REGISTRY=${COREPACK_NPM_REGISTRY}
+ENV npm_config_registry=${npm_config_registry}
 
 WORKDIR /app
 

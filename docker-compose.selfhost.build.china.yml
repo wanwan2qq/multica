@@ -1,0 +1,23 @@
+# China / restricted-network build args for self-host source builds.
+#
+# Use together with the normal self-host + build overlays:
+#   docker compose \
+#     -f docker-compose.selfhost.yml \
+#     -f docker-compose.selfhost.build.yml \
+#     -f docker-compose.selfhost.build.china.yml \
+#     up -d --build
+#
+# Or: ./scripts/selfhost-rebuild.sh --china
+
+services:
+  backend:
+    build:
+      args:
+        GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+        GOSUMDB: ${GOSUMDB:-sum.golang.google.cn}
+
+  frontend:
+    build:
+      args:
+        COREPACK_NPM_REGISTRY: ${COREPACK_NPM_REGISTRY:-https://registry.npmmirror.com}
+        npm_config_registry: ${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
