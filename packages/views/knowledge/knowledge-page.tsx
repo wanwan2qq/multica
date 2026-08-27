@@ -16,6 +16,7 @@ import {
   knowledgeTreeOptions,
 } from "@multica/core/knowledge/queries";
 import { useRefStore } from "@multica/core/knowledge/stores/ref-store";
+import { useKnowledgePathStore } from "@multica/core/knowledge/stores/knowledge-path-store";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { Button } from "@multica/ui/components/ui/button";
 import {
@@ -89,14 +90,19 @@ export function KnowledgePage() {
     // otherwise an in-flight refetch for the *previous* ref could land us
     // on a stale default-path redirect.
     if (pathParam.length > 0 || !treeQuery.isSuccess || !treeIsForCurrentRef) return;
-    const next = defaultKnowledgePath(files);
+    // Re-entry through the sidebar (bare `/{slug}/knowledge`) or a refresh
+    // can drop `?path=`. Restore the last file the user opened when it still
+    // exists on this ref; otherwise fall back to the default overview.
+    const last = useKnowledgePathStore.getState().pathByWs[wsId];
+    const next = last && files.includes(last) ? last : defaultKnowledgePath(files);
     if (!next) return;
     const params = new URLSearchParams(searchParams);
     params.set("path", next);
     replace(`${pathname}?${params.toString()}`);
-  }, [files, pathParam, pathname, replace, searchParams, treeQuery.isSuccess, treeIsForCurrentRef]);
+  }, [files, pathParam, pathname, replace, searchParams, treeQuery.isSuccess, treeIsForCurrentRef, wsId]);
 
   const selectPath = (next: string) => {
+    useKnowledgePathStore.getState().setPath(wsId, next);
     const params = new URLSearchParams(searchParams);
     params.set("path", next);
     replace(`${pathname}?${params.toString()}`);
@@ -104,8 +110,9 @@ export function KnowledgePage() {
 
   // Switching branches can orphan the currently selected path (it might
   // not exist on the new ref). Clear ?path= before the new tree/file
-  // fetches so the user isn't briefly pointed at a dead link, and let
-  // the auto-redirect above land them on the new ref's overview.
+  // fetches so the user isn't briefly pointed at a dead link. The
+  // auto-redirect above then lands them back on the last-opened file only
+  // if it still exists on the new ref, otherwise the new ref's overview.
   const handleBranchChange = useCallback(
     (next: string) => {
       useRefStore.getState().setRef(wsId, next);
