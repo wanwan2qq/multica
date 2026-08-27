@@ -1,6 +1,14 @@
 # --- Build stage ---
 FROM golang:1.26-alpine AS builder
 
+# Override at build time for restricted networks, e.g.:
+#   --build-arg GOPROXY=https://goproxy.cn,direct
+#   --build-arg GOSUMDB=sum.golang.google.cn
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
+ENV GOPROXY=${GOPROXY}
+ENV GOSUMDB=${GOSUMDB}
+
 RUN apk add --no-cache git
 
 WORKDIR /src
