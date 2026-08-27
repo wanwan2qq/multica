@@ -23,8 +23,9 @@ server/tmp
 *.swp
 *.swo
 
-# OS
+# OS / macOS AppleDouble resource forks (break go migrate Glob "*.up.sql")
 .DS_Store
+**/._*
 Thumbs.db
 
 # Test
