@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nProvider } from "@multica/core/i18n/react";
 import { ApiError } from "@multica/core/api";
@@ -39,6 +40,7 @@ const treeRef = vi.hoisted(() => ({
     isPending: false,
     isError: false,
     isSuccess: false,
+    isFetching: false,
     data: undefined as unknown,
     error: null as unknown,
   },
@@ -47,6 +49,7 @@ const fileRef = vi.hoisted(() => ({
   current: {
     isPending: false,
     isError: false,
+    isFetching: false,
     data: undefined as unknown,
     error: null as unknown,
   },
@@ -55,6 +58,7 @@ const branchesRef = vi.hoisted(() => ({
   current: {
     isPending: false,
     isError: false,
+    isFetching: false,
     data: { branches: [] as string[], default_branch: "" },
   },
 }));
@@ -62,6 +66,7 @@ const seenKeys = vi.hoisted(() => ({ current: [] as unknown[][] }));
 const searchRef = vi.hoisted(() => ({ current: new URLSearchParams() }));
 const replace = vi.hoisted(() => vi.fn());
 const refByWsRef = vi.hoisted(() => ({ current: {} as Record<string, string> }));
+const invalidateQueries = vi.hoisted(() => vi.fn());
 
 vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-1" }));
 vi.mock("@multica/core/paths", async (importOriginal) => ({
@@ -72,6 +77,13 @@ vi.mock("@multica/core/paths", async (importOriginal) => ({
   }),
 }));
 vi.mock("@multica/core/knowledge/queries", () => ({
+  knowledgeKeys: {
+    all: (wsId: string) => ["workspaces", wsId, "knowledge"] as const,
+    branches: (wsId: string) => ["workspaces", wsId, "knowledge", "branches"] as const,
+    tree: (wsId: string, ref: string) => ["workspaces", wsId, "knowledge", "tree", ref] as const,
+    file: (wsId: string, ref: string, path: string) =>
+      ["workspaces", wsId, "knowledge", "file", ref, path] as const,
+  },
   knowledgeBranchesOptions: () => ({ queryKey: ["knowledge", "branches"] }),
   knowledgeTreeOptions: (_wsId: string, ref: string) => ({
     queryKey: ["knowledge", "tree", ref],
@@ -105,6 +117,9 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
       if (key.includes("tree")) return treeRef.current;
       return fileRef.current;
     },
+    useQueryClient: () => ({
+      invalidateQueries,
+    }),
   };
 });
 vi.mock("../rich-content", () => ({
@@ -135,6 +150,7 @@ function renderPage() {
 describe("KnowledgePage", () => {
   beforeEach(() => {
     replace.mockReset();
+    invalidateQueries.mockReset();
     searchRef.current = new URLSearchParams();
     seenKeys.current = [];
     refByWsRef.current = {};
@@ -145,14 +161,22 @@ describe("KnowledgePage", () => {
       isPending: false,
       isError: false,
       isSuccess: false,
+      isFetching: false,
       data: undefined,
       error: null,
     };
     fileRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: undefined,
       error: null,
+    };
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      data: { branches: [], default_branch: "" },
     };
   });
 
@@ -475,5 +499,51 @@ describe("KnowledgePage", () => {
     expect(replace).not.toHaveBeenCalledWith(
       expect.stringContaining("path=main-only.md"),
     );
+  });
+
+  it("invalidates all knowledge queries when Refresh is clicked", async () => {
+    const user = userEvent.setup();
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [{ path: "README.md", type: "blob" }],
+      },
+      error: null,
+    };
+    searchRef.current = new URLSearchParams("path=README.md");
+    fileRef.current = {
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      data: {
+        path: "README.md",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/blob/main/README.md",
+        media: "markdown",
+        truncated: false,
+        size: 8,
+        content: "# Hello KB",
+      },
+      error: null,
+    };
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "Refresh knowledge base from Git" }));
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["workspaces", "ws-1", "knowledge"],
+    });
   });
 });

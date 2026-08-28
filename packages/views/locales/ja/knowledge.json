@@ -14,7 +14,9 @@
     "branch_load_failed": "ブランチを読み込めませんでした — デフォルトを表示中",
     "search_placeholder": "ファイルを絞り込み…",
     "search_aria": "ナレッジベースファイルを絞り込み",
-    "search_clear": "フィルターをクリア"
+    "search_clear": "フィルターをクリア",
+    "refresh": "更新",
+    "refresh_aria": "Git からナレッジを再取得"
   },
   "empty": {
     "not_configured_title": "ナレッジリポジトリが未設定です",
