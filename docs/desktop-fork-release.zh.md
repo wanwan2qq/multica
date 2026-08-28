@@ -11,6 +11,8 @@
 
 两者互不影响：`desktop.json` 管数据，`publish` 管版本更新。
 
+本地改客户端代码、连自托管调试见 [desktop-dev.zh.md](./desktop-dev.zh.md)。
+
 ---
 
 ## 版本命名规范
