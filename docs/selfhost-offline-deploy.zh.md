@@ -22,6 +22,7 @@
 | API 端口 | `8082`（`.env` 里 `PORT` / `BACKEND_PORT`） |
 | Web 端口 | `3002`（`.env` 里 `FRONTEND_PORT`） |
 | 桌面客户端 | `~/.multica/desktop.json` → `http://10.15.42.27:8082` |
+| 客户端更新源 | fork Release：`wanwan2qq/multica`（见 [desktop-fork-release.zh.md](./desktop-fork-release.zh.md)） |
 
 ---
 
