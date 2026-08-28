@@ -77,7 +77,7 @@ By default it pulls the latest stable release images from GHCR. To build the bac
 If the selected GHCR tag has not been published yet, `make selfhost` now tells you to fall back to `make selfhost-build`.
 `make selfhost-build` uses local `multica-backend:dev` / `multica-web:dev` tags, so it does not overwrite the pulled `:latest` images.
 
-若服务器无法访问 GitHub / Docker Hub / Go·npm 官方源，或需要给局域网桌面客户端直连，请见 [docs/selfhost-offline-deploy.zh.md](docs/selfhost-offline-deploy.zh.md)（`./scripts/selfhost-pack-local.sh` → 上传 → `./scripts/selfhost-rebuild.sh --china --lan`）。Fork 桌面客户端版本与自动更新见 [docs/desktop-fork-release.zh.md](docs/desktop-fork-release.zh.md)。
+若服务器无法访问 GitHub / Docker Hub / Go·npm 官方源，或需要给局域网桌面客户端直连，请见 [docs/selfhost-offline-deploy.zh.md](docs/selfhost-offline-deploy.zh.md)（`./scripts/selfhost-pack-local.sh` → 上传 → `./scripts/selfhost-rebuild.sh --china --lan`）。Fork 桌面客户端版本与自动更新见 [docs/desktop-fork-release.zh.md](docs/desktop-fork-release.zh.md)；开发环境启动见 [docs/desktop-dev.zh.md](docs/desktop-dev.zh.md)。
 
 Once ready:
 
