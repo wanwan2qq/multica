@@ -2,8 +2,8 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
-import { AlertCircle, ChevronRight, ExternalLink, FileQuestion, Library } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, ChevronRight, ExternalLink, FileQuestion, Library, RefreshCw } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorCode } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import {
@@ -13,6 +13,7 @@ import {
 import {
   knowledgeBranchesOptions,
   knowledgeFileOptions,
+  knowledgeKeys,
   knowledgeTreeOptions,
 } from "@multica/core/knowledge/queries";
 import { useRefStore } from "@multica/core/knowledge/stores/ref-store";
@@ -41,6 +42,7 @@ export function KnowledgePage() {
   const { t } = useT("knowledge");
   const wsId = useWorkspaceId();
   const p = useWorkspacePaths();
+  const queryClient = useQueryClient();
   const { pathname, searchParams, replace } = useNavigation();
   const pathParam = searchParams.get("path") ?? "";
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -58,6 +60,16 @@ export function KnowledgePage() {
 
   const treeQuery = useQuery(knowledgeTreeOptions(wsId, activeRef));
   const fileQuery = useQuery(knowledgeFileOptions(wsId, activeRef, pathParam));
+
+  // Manual refresh: Git remotes move under the same branch name, but React
+  // Query keeps the last tree/file payload until something invalidates it.
+  // Desktop stays focused for long sessions, so window-focus refetch alone
+  // is not enough — expose an explicit control next to the branch picker.
+  const isRefreshing =
+    branchesQuery.isFetching || treeQuery.isFetching || fileQuery.isFetching;
+  const handleRefresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: knowledgeKeys.all(wsId) });
+  }, [queryClient, wsId]);
 
   // Render-time ref guards: when the user switches branches, `activeRef`
   // flips and the new query starts, but `treeQuery.data` / `fileQuery.data`
@@ -147,6 +159,17 @@ export function KnowledgePage() {
               onChange={handleBranchChange}
               disabled={!treeQuery.isSuccess && !branchesQuery.isSuccess}
             />
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={t(($) => $.page.refresh_aria)}
+              title={t(($) => $.page.refresh)}
+              onClick={handleRefresh}
+              disabled={isRefreshing || notConfigured}
+            >
+              <RefreshCw className={isRefreshing ? "size-3.5 animate-spin" : "size-3.5"} />
+              <span className="hidden sm:inline">{t(($) => $.page.refresh)}</span>
+            </Button>
             {browseURL ? (
               <Button
                 variant="outline"
@@ -255,7 +278,7 @@ export function KnowledgePage() {
                   description={t(($) => $.empty.no_file_description)}
                 />
               ) : showFilePending ? (
-                <div className="mx-auto max-w-[76ch] px-6 pt-7">
+                <div className="mx-auto w-full max-w-[96ch] px-6 pt-7 sm:px-8 lg:px-10">
                   <Skeleton className="h-8 w-64" />
                   <Skeleton className="mt-4 h-48 w-full" />
                 </div>
@@ -427,13 +450,13 @@ function KnowledgeFileBody({
         </p>
       ) : null}
       {media === "markdown" ? (
-        <div className="mx-auto max-w-[76ch] px-6 pb-24 pt-7 sm:px-8">
+        <div className="mx-auto w-full max-w-[96ch] px-6 pb-24 pt-7 sm:px-8 lg:px-10">
           <RichContent content={resolvedContent} density="document" phase="settled" />
         </div>
       ) : media === "html" ? (
         <HtmlPreview content={resolvedContent} title={currentPath} />
       ) : (
-        <pre className="mx-auto max-w-[80ch] overflow-x-auto px-6 py-7 font-mono text-caption leading-relaxed text-foreground">
+        <pre className="mx-auto w-full max-w-[96ch] overflow-x-auto px-6 py-7 font-mono text-caption leading-relaxed text-foreground sm:px-8 lg:px-10">
           {resolvedContent}
         </pre>
       )}
