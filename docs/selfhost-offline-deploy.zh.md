@@ -23,6 +23,7 @@
 | Web 端口 | `3002`（`.env` 里 `FRONTEND_PORT`） |
 | 桌面客户端 | `~/.multica/desktop.json` → `http://10.15.42.27:8082` |
 | 客户端更新源 | fork Release：`wanwan2qq/multica`（见 [desktop-fork-release.zh.md](./desktop-fork-release.zh.md)） |
+| 开发客户端启动 | [desktop-dev.zh.md](./desktop-dev.zh.md)（`VITE_*` + `node scripts/dev.mjs`） |
 
 ---
 
