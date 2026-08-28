@@ -14,7 +14,9 @@
     "branch_load_failed": "无法加载分支 — 使用默认",
     "search_placeholder": "过滤文件…",
     "search_aria": "过滤知识库文件",
-    "search_clear": "清除过滤"
+    "search_clear": "清除过滤",
+    "refresh": "刷新",
+    "refresh_aria": "从 Git 刷新知识库"
   },
   "empty": {
     "not_configured_title": "尚未配置知识库仓库",

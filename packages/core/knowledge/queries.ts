@@ -19,7 +19,9 @@ export function knowledgeBranchesOptions(wsId: string) {
     queryKey: knowledgeKeys.branches(wsId),
     queryFn: () => api.getKnowledgeBranches(wsId),
     enabled: wsId.length > 0,
-    staleTime: 5 * 60 * 1000,
+    // Branch lists change rarely; keep a short cache so the picker feels
+    // snappy. Manual Refresh on the knowledge page invalidates this key.
+    staleTime: 60 * 1000,
     retry: retryUnlessUnconfigured,
   });
 }
