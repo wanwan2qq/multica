@@ -8,12 +8,12 @@ import {
 } from "./runtime-config";
 
 describe("runtime config", () => {
-  it("uses cloud defaults without a desktop.json file", () => {
+  it("uses self-hosted defaults without a desktop.json file", () => {
     expect(DEFAULT_RUNTIME_CONFIG).toEqual({
       schemaVersion: 1,
-      apiUrl: "https://api.multica.ai",
-      wsUrl: "wss://api.multica.ai/ws",
-      appUrl: "https://multica.ai",
+      apiUrl: "http://10.15.42.27:8082",
+      wsUrl: "ws://10.15.42.27:8082/ws",
+      appUrl: "http://10.15.42.27:3002",
     });
   });
 
