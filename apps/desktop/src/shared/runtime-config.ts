@@ -13,11 +13,15 @@ export type RuntimeConfigResult =
   | { ok: true; config: RuntimeConfig }
   | { ok: false; error: RuntimeConfigError };
 
+// KB-HOOK: self-hosted default — this fork's packaged clients connect to the
+// internal deployment, not the hosted Multica (upstream keeps api.multica.ai
+// here). apiUrl is a bare IP so `deriveAppUrl` returns it unchanged, hence appUrl
+// must be set explicitly to the web app's real port (3002).
 export const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = Object.freeze({
   schemaVersion: 1,
-  apiUrl: "https://api.multica.ai",
-  wsUrl: "wss://api.multica.ai/ws",
-  appUrl: "https://multica.ai",
+  apiUrl: "http://10.15.42.27:8082",
+  wsUrl: "ws://10.15.42.27:8082/ws",
+  appUrl: "http://10.15.42.27:3002",
 });
 
 const LOCAL_DEV_RUNTIME_CONFIG: RuntimeConfig = Object.freeze({
