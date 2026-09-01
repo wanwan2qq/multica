@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -580,6 +581,174 @@ func TestListIssuesPropertyFilterAndSort(t *testing.T) {
 	if got := listIssues("?limit=5&sort=property:" + uuid.NewString()); len(got) == 0 {
 		t.Fatalf("unknown-definition sort should fall back to position order, got empty")
 	}
+
+	// "No value" filter (the "__none__" sentinel): issues without the property
+	// match, the one explicitly set to `true` does not. limit=200 so the ~55
+	// matching issues (54 pad + numLow/numHigh, all without the checkbox) fit
+	// on one page — the 50-row default would hide numLow behind windowing.
+	noValueQuery := func(values ...string) string {
+		buf, _ := json.Marshal(map[string][]string{box.ID: values})
+		return "?limit=200&properties=" + url.QueryEscape(string(buf))
+	}
+	noneGot := ids(listIssues(noValueQuery("__none__")))
+	if _, present := noneGot[target]; present {
+		t.Fatalf("no-value filter included the issue with the property set")
+	}
+	if _, present := noneGot[numLow]; !present {
+		t.Fatalf("no-value filter missed an issue without the property")
+	}
+
+	// OR within a definition: "true" plus "no value" covers set and unset.
+	both := ids(listIssues(noValueQuery("true", "__none__")))
+	if _, present := both[target]; !present {
+		t.Fatalf("OR no-value filter missed the set issue")
+	}
+	if _, present := both[numLow]; !present {
+		t.Fatalf("OR no-value filter missed the unset issue")
+	}
+
+	// AND across definitions: matching select + no-value checkbox must exclude
+	// the target (it has the checkbox set, so it cannot match the unset branch).
+	andBuf, _ := json.Marshal(map[string][]string{sel.ID: {hitID}, box.ID: {"__none__"}})
+	andGot := ids(listIssues("?limit=50&properties=" + url.QueryEscape(string(andBuf))))
+	if _, present := andGot[target]; present {
+		t.Fatalf("AND no-value semantics failed: target matched contradictory filter")
+	}
+
+	// The open_only branch unrolls the same compiled filter through the static
+	// ListOpenIssues query, so the marker must be honored there too.
+	openNone := ids(listIssues(filterQuery(box.ID, "__none__") + "&open_only=true"))
+	if _, present := openNone[target]; present {
+		t.Fatalf("open_only no-value filter included the set issue")
+	}
+	if len(openNone) == 0 {
+		t.Fatalf("open_only no-value filter returned nothing")
+	}
+
+	// A number property matches a numeric filter value (the stored jsonb number,
+	// not the "3.5" string form).
+	numLowGot := ids(listIssues(filterQuery(num.ID, "1")))
+	if _, present := numLowGot[numLow]; !present {
+		t.Fatalf("number filter missed the issue with value 1")
+	}
+	if _, present := numLowGot[numHigh]; present {
+		t.Fatalf("number filter matched the wrong numeric value")
+	}
+	numHighGot := ids(listIssues(filterQuery(num.ID, "9.5")))
+	if _, present := numHighGot[numHigh]; !present {
+		t.Fatalf("number filter missed the issue with value 9.5")
+	}
+}
+
+func TestParsePropertiesFilterNoValueUnit(t *testing.T) {
+	defID := uuid.NewString()
+	w := httptest.NewRecorder()
+	var args []any
+	addArg := func(v any) string {
+		args = append(args, v)
+		return fmt.Sprintf("$%d", len(args))
+	}
+
+	// "__none__" compiles to the marker object, and the predicate turns that
+	// marker into a key-absence check rather than a containment pattern.
+	groups, ok := parsePropertiesFilterParam(w, fmt.Sprintf(`{"%s":["__none__"]}`, defID))
+	if !ok {
+		t.Fatalf("no-value parse failed: %s", w.Body.String())
+	}
+	if len(groups) != 1 || len(groups[0]) != 1 {
+		t.Fatalf("expected one group with one alternative, got %d / %d", len(groups), len(groups[0]))
+	}
+	if parsed, isMarker := parseNoPropertyValuePattern(groups[0][0]); !isMarker || parsed != defID {
+		t.Fatalf("expected no-value marker for %s, got %q isMarker=%v", defID, parsed, isMarker)
+	}
+	sql := propertiesFilterPredicate(groups, addArg)
+	if !strings.Contains(sql, "NOT (i.properties ? $1)") {
+		t.Fatalf("no-value predicate wrong: %s", sql)
+	}
+
+	// A normal containment alternative is never mistaken for the marker.
+	groups, ok = parsePropertiesFilterParam(w, fmt.Sprintf(`{"%s":["true"]}`, defID))
+	if !ok {
+		t.Fatalf("containment parse failed: %s", w.Body.String())
+	}
+	if _, isMarker := parseNoPropertyValuePattern(groups[0][0]); isMarker {
+		t.Fatalf("checkbox true alternative misdetected as the marker")
+	}
+
+	// Mixed true + no value: containment OR key-absence.
+	groups, ok = parsePropertiesFilterParam(w, fmt.Sprintf(`{"%s":["true","__none__"]}`, defID))
+	if !ok {
+		t.Fatalf("mixed parse failed: %s", w.Body.String())
+	}
+	args = nil
+	sql = propertiesFilterPredicate(groups, addArg)
+	if !strings.Contains(sql, "@> $1") || !strings.Contains(sql, "NOT (i.properties ? ") {
+		t.Fatalf("mixed predicate wrong: %s", sql)
+	}
+
+	// Duplicate sentinels collapse to a single marker.
+	groups, ok = parsePropertiesFilterParam(w, fmt.Sprintf(`{"%s":["__none__","__none__"]}`, defID))
+	if !ok {
+		t.Fatalf("duplicate parse failed: %s", w.Body.String())
+	}
+	if len(groups[0]) != 1 {
+		t.Fatalf("duplicate sentinel produced %d alternatives, want 1", len(groups[0]))
+	}
+
+	// A numeric filter value also emits the stored jsonb number form, so a
+	// number property matches the scalar instead of only the "3.5" string.
+	groups, ok = parsePropertiesFilterParam(w, fmt.Sprintf(`{"%s":["3.5"]}`, defID))
+	if !ok {
+		t.Fatalf("numeric parse failed: %s", w.Body.String())
+	}
+	hasNumber := false
+	for _, alt := range groups[0] {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(alt, &m); err != nil {
+			continue
+		}
+		var num float64
+		if err := json.Unmarshal(m[defID], &num); err == nil && num == 3.5 {
+			hasNumber = true
+		}
+	}
+	if !hasNumber {
+		t.Fatalf("numeric filter value did not emit a jsonb number containment form: %v", groups[0])
+	}
+	// A date value must NOT be misread as a number.
+	groups, ok = parsePropertiesFilterParam(w, fmt.Sprintf(`{"%s":["2026-08-19"]}`, defID))
+	if !ok {
+		t.Fatalf("date parse failed: %s", w.Body.String())
+	}
+	for _, alt := range groups[0] {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(alt, &m); err != nil {
+			continue
+		}
+		var num float64
+		if err := json.Unmarshal(m[defID], &num); err == nil {
+			t.Fatalf("date value misread as a number: %v", alt)
+		}
+	}
+
+	// NaN / Infinity parse as floats but are not valid JSON — they must be
+	// skipped, not marshaled into a 400.
+	for _, bad := range []string{"NaN", "Infinity", "-Infinity"} {
+		groups, ok = parsePropertiesFilterParam(w, fmt.Sprintf(`{"%s":[%q]}`, defID, bad))
+		if !ok {
+			t.Fatalf("non-finite parse of %q failed: %s", bad, w.Body.String())
+		}
+		for _, alt := range groups[0] {
+			var m map[string]json.RawMessage
+			if err := json.Unmarshal(alt, &m); err != nil {
+				continue
+			}
+			var num float64
+			if err := json.Unmarshal(m[defID], &num); err == nil && (math.IsNaN(num) || math.IsInf(num, 0)) {
+				t.Fatalf("non-finite value %q leaked a number containment form: %v", bad, alt)
+			}
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -978,6 +1147,136 @@ func TestIssueActorPropertyFacets(t *testing.T) {
 	memberCounts := facetKeys(plainMemberID)
 	if memberCounts[memberRef] != 1 || memberCounts[otherRef] != 1 {
 		t.Fatalf("plain member sees different facet keys than the owner: %v", memberCounts)
+	}
+}
+
+// TestIssuePropertyFacetNoValue verifies the checkbox facet reports an unset
+// "__none__" bucket alongside "true"/"false", so the filter menu's "No value"
+// option carries a real count. A brand-new select marker narrows the facet to
+// exactly the two issues created here, keeping the counts deterministic in the
+// shared fixture workspace.
+func TestIssuePropertyFacetNoValue(t *testing.T) {
+	marker := createTestProperty(t, map[string]any{
+		"name": "FM" + uuid.NewString()[:8], "type": "select",
+		"config": map[string]any{"options": []map[string]any{{"name": "Only", "color": "#3b82f6"}}},
+	})
+	markerOpt := marker.Config.Options[0].ID
+	hold := createTestProperty(t, map[string]any{"name": "FH" + uuid.NewString()[:8], "type": "checkbox"})
+
+	setID := createPropertyTestIssue(t, "hold facet set")
+	unsetID := createPropertyTestIssue(t, "hold facet unset")
+	for _, id := range []string{setID, unsetID} {
+		if w := setIssuePropertyRaw(t, id, marker.ID, markerOpt); w.Code != http.StatusOK {
+			t.Fatalf("seed marker: %d %s", w.Code, w.Body.String())
+		}
+	}
+	if w := setIssuePropertyRaw(t, setID, hold.ID, true); w.Code != http.StatusOK {
+		t.Fatalf("set hold: %d %s", w.Code, w.Body.String())
+	}
+
+	w := httptest.NewRecorder()
+	req := newRequest(http.MethodPost, "/api/issues/table/facets", map[string]any{
+		"query": map[string]any{
+			"scope":   map[string]any{"kind": "workspace"},
+			"filters": map[string]any{"properties": map[string][]string{marker.ID: {markerOpt}}},
+			"sort":    map[string]any{"field": "position", "direction": "asc"},
+		},
+		"facets":        []map[string]any{{"kind": "property", "property_id": hold.ID}},
+		"include_total": false,
+	})
+	testHandler.ListIssueTableFacets(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListIssueTableFacets: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp issueTableFacetsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode facets: %v", err)
+	}
+	counts := map[string]int64{}
+	for _, facet := range resp.Facets {
+		for _, value := range facet.Values {
+			counts[value.Key] = value.Count
+		}
+	}
+	if counts["true"] != 1 || counts["__none__"] != 1 {
+		t.Fatalf("hold facet counts wrong: %v", counts)
+	}
+}
+
+// TestIssuePropertyFacetScalarTypes covers the facet branches added for
+// text / number / date / url, which previously fell through to the 422
+// default. A marker select narrows the facet to exactly two issues.
+func TestIssuePropertyFacetScalarTypes(t *testing.T) {
+	marker := createTestProperty(t, map[string]any{
+		"name": "FM" + uuid.NewString()[:8], "type": "select",
+		"config": map[string]any{"options": []map[string]any{{"name": "Only", "color": "#3b82f6"}}},
+	})
+	markerOpt := marker.Config.Options[0].ID
+	num := createTestProperty(t, map[string]any{"name": "FN" + uuid.NewString()[:8], "type": "number"})
+	text := createTestProperty(t, map[string]any{"name": "FT" + uuid.NewString()[:8], "type": "text"})
+	date := createTestProperty(t, map[string]any{"name": "FD" + uuid.NewString()[:8], "type": "date"})
+	url := createTestProperty(t, map[string]any{"name": "FU" + uuid.NewString()[:8], "type": "url"})
+
+	withNum := createPropertyTestIssue(t, "scalar facet num")
+	withText := createPropertyTestIssue(t, "scalar facet text")
+	for _, id := range []string{withNum, withText} {
+		if w := setIssuePropertyRaw(t, id, marker.ID, markerOpt); w.Code != http.StatusOK {
+			t.Fatalf("seed marker: %d %s", w.Code, w.Body.String())
+		}
+	}
+	if w := setIssuePropertyRaw(t, withNum, num.ID, 3.5); w.Code != http.StatusOK {
+		t.Fatalf("seed number: %d %s", w.Code, w.Body.String())
+	}
+	if w := setIssuePropertyRaw(t, withText, text.ID, "hello"); w.Code != http.StatusOK {
+		t.Fatalf("seed text: %d %s", w.Code, w.Body.String())
+	}
+	// A date set on neither issue keeps its facet to a single __none__ bucket.
+	if w := setIssuePropertyRaw(t, withNum, date.ID, "2026-08-19"); w.Code != http.StatusOK {
+		t.Fatalf("seed date: %d %s", w.Code, w.Body.String())
+	}
+	if w := setIssuePropertyRaw(t, withText, url.ID, "https://example.com"); w.Code != http.StatusOK {
+		t.Fatalf("seed url: %d %s", w.Code, w.Body.String())
+	}
+
+	facetCounts := func(propertyID string) map[string]int64 {
+		t.Helper()
+		w := httptest.NewRecorder()
+		req := newRequest(http.MethodPost, "/api/issues/table/facets", map[string]any{
+			"query": map[string]any{
+				"scope":   map[string]any{"kind": "workspace"},
+				"filters": map[string]any{"properties": map[string][]string{marker.ID: {markerOpt}}},
+				"sort":    map[string]any{"field": "position", "direction": "asc"},
+			},
+			"facets":        []map[string]any{{"kind": "property", "property_id": propertyID}},
+			"include_total": false,
+		})
+		testHandler.ListIssueTableFacets(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("ListIssueTableFacets(%s): expected 200, got %d: %s", propertyID, w.Code, w.Body.String())
+		}
+		var resp issueTableFacetsResponse
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode facets: %v", err)
+		}
+		counts := map[string]int64{}
+		for _, facet := range resp.Facets {
+			for _, value := range facet.Values {
+				counts[value.Key] = value.Count
+			}
+		}
+		return counts
+	}
+
+	// Scalar facets collapse to the bounded "__set__"/"__none__" buckets (the
+	// UI only reads the "No value" count for these types).
+	for _, tc := range []struct {
+		name string
+		id   string
+	}{{"number", num.ID}, {"text", text.ID}, {"date", date.ID}, {"url", url.ID}} {
+		counts := facetCounts(tc.id)
+		if counts["__set__"] != 1 || counts["__none__"] != 1 {
+			t.Fatalf("%s facet counts wrong: %v", tc.name, counts)
+		}
 	}
 }
 

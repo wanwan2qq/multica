@@ -130,6 +130,7 @@ function renderPage() {
   const nav: NavigationAdapter = {
     pathname: "/acme/knowledge",
     searchParams: searchRef.current,
+    hash: "",
     push: vi.fn(),
     replace,
     back: vi.fn(),
@@ -186,6 +187,7 @@ describe("KnowledgePage", () => {
 
   it("asks the user to label a repo when none is configured", () => {
     treeRef.current = {
+      isFetching: false,
       isPending: false,
       isError: true,
       isSuccess: false,
@@ -207,11 +209,13 @@ describe("KnowledgePage", () => {
   it("previews markdown from the remote tree", () => {
     searchRef.current = new URLSearchParams("path=README.md");
     branchesRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     treeRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       isSuccess: true,
@@ -226,6 +230,7 @@ describe("KnowledgePage", () => {
       error: null,
     };
     fileRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       data: {
@@ -247,11 +252,13 @@ describe("KnowledgePage", () => {
   it("renders html files in a full iframe without sandbox", () => {
     searchRef.current = new URLSearchParams("path=page.html");
     branchesRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     treeRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       isSuccess: true,
@@ -266,6 +273,7 @@ describe("KnowledgePage", () => {
       error: null,
     };
     fileRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       data: {
@@ -291,6 +299,7 @@ describe("KnowledgePage", () => {
 
   it("passes wsId + activeRef into the knowledge tree query key", () => {
     branchesRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       data: { branches: ["main", "dev"], default_branch: "main" },
@@ -312,6 +321,7 @@ describe("KnowledgePage", () => {
     // treats this as "still loading" and renders the skeleton.
     refByWsRef.current = { "ws-1": "dev" };
     treeRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       isSuccess: true,
@@ -335,12 +345,14 @@ describe("KnowledgePage", () => {
 
   it("renders a skeleton instead of stale file data when activeRef does not match", () => {
     branchesRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     searchRef.current = new URLSearchParams("path=README.md");
     treeRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       isSuccess: true,
@@ -356,6 +368,7 @@ describe("KnowledgePage", () => {
     };
     // fileRef holds stale data for `main` but the user switched to `dev`.
     fileRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       data: {
@@ -380,11 +393,13 @@ describe("KnowledgePage", () => {
     // URL no longer carries ?path=. The auto-redirect must restore the file
     // the user last opened from the persisted store rather than the overview.
     branchesRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     treeRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       isSuccess: true,
@@ -416,11 +431,13 @@ describe("KnowledgePage", () => {
 
   it("falls back to the default overview when the stored path is gone on the current ref", () => {
     branchesRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     treeRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       isSuccess: true,
@@ -443,11 +460,13 @@ describe("KnowledgePage", () => {
 
   it("does not wipe ?path= when the URL already carries it", () => {
     branchesRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     treeRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       isSuccess: true,
@@ -478,6 +497,7 @@ describe("KnowledgePage", () => {
     // based on the stale main tree.
     refByWsRef.current = { "ws-1": "dev" };
     treeRef.current = {
+      isFetching: false,
       isPending: false,
       isError: false,
       isSuccess: true,

@@ -24,9 +24,10 @@ const TaskContextMarkerRelPath = ".multica/daemon_task_context.json"
 const TaskContextMarkerManagedBy = "multica-daemon-task"
 
 type taskContextMarkerFile struct {
-	ManagedBy string `json:"managed_by"`
-	AgentID   string `json:"agent_id,omitempty"`
-	IssueID   string `json:"issue_id,omitempty"`
+	ManagedBy     string `json:"managed_by"`
+	AgentID       string `json:"agent_id,omitempty"`
+	IssueID       string `json:"issue_id,omitempty"`
+	ChatSessionID string `json:"chat_session_id,omitempty"`
 }
 
 // EnsureWorkspacesRootMarker writes a persistent daemon-task marker at
@@ -212,9 +213,10 @@ func writeTaskContextMarker(workDir string, ctx TaskContextForEnv, manifest *sid
 	// cleanup. If a crash leaves it behind, the CLI intentionally treats it
 	// as daemon context and fails closed instead of using a user PAT.
 	payload := taskContextMarkerFile{
-		ManagedBy: TaskContextMarkerManagedBy,
-		AgentID:   ctx.AgentID,
-		IssueID:   ctx.IssueID,
+		ManagedBy:     TaskContextMarkerManagedBy,
+		AgentID:       ctx.AgentID,
+		IssueID:       ctx.IssueID,
+		ChatSessionID: ctx.ChatSessionID,
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
@@ -366,6 +368,10 @@ func skillsDirPath(workDir, provider string) string {
 		// without those, OpenCode walks from the daemon's inherited PWD and
 		// misses .opencode/skills + AGENTS.md entirely (MUL-2416).
 		return filepath.Join(workDir, ".opencode", "skills")
+	case "codearts":
+		// CodeArts Agent discovers project skills from its provider-owned
+		// .codeartsdoer/skills directory.
+		return filepath.Join(workDir, ".codeartsdoer", "skills")
 	case "deveco":
 		// DevEco Code (Huawei's OpenCode fork) natively discovers project
 		// skills from .deveco/skills/ in the workdir, mirroring OpenCode's
