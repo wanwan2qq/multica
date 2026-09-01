@@ -363,6 +363,20 @@ describe("personal nav — Chat", () => {
     expect(currentChatBadge?.animated).toBe(false);
   });
 
+  it("renders the inbox unread count as a red pill badge", () => {
+    inboxItems.current = [{ id: "inbox-1", read: false }];
+    const { container } = render(<AppSidebar />);
+    const flow = container.querySelector<HTMLElement>(
+      'button[data-href="/acme/inbox"] number-flow-react',
+    );
+    // The pill is the counter's wrapper — same red IM badge as the chat
+    // thread list, so an unread inbox count reads as a badge, not a number.
+    const pill = flow?.parentElement;
+    expect(pill).not.toBeNull();
+    expect(pill).toHaveClass("rounded-full");
+    expect(pill).toHaveClass("bg-[oklch(0.62_0.14_18)]");
+  });
+
   it("renders a Chat nav link to the workspace chat route", () => {
     const { container } = render(<AppSidebar />);
     expect(chatNav(container)).not.toBeNull();
