@@ -35,7 +35,7 @@ describe("loadRuntimeConfig", () => {
     });
   });
 
-  it("uses cloud defaults when packaged config is absent", async () => {
+  it("uses self-hosted defaults when packaged config is absent", async () => {
     const dir = await mkdtemp(join(tmpdir(), "multica-desktop-config-"));
     await expect(
       loadRuntimeConfig({
@@ -47,9 +47,9 @@ describe("loadRuntimeConfig", () => {
       ok: true,
       config: {
         schemaVersion: 1,
-        apiUrl: "https://api.multica.ai",
-        wsUrl: "wss://api.multica.ai/ws",
-        appUrl: "https://multica.ai",
+        apiUrl: "http://10.15.42.27:8082",
+        wsUrl: "ws://10.15.42.27:8082/ws",
+        appUrl: "http://10.15.42.27:3002",
       },
     });
   });
