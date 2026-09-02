@@ -15,6 +15,8 @@
     "search_placeholder": "파일 필터링…",
     "search_aria": "지식 베이스 파일 필터링",
     "search_clear": "필터 지우기",
+    "hide_dot_prefixed": "점(.)으로 시작하는 항목 숨기기",
+    "hide_dot_prefixed_aria": "이름이 점으로 시작하는 파일과 폴더 숨기기",
     "refresh": "새로고침",
     "refresh_aria": "Git에서 지식 베이스 새로고침",
     "copy_path": "경로 복사",
@@ -40,6 +42,7 @@
     "path_not_found_title": "경로를 찾을 수 없습니다",
     "path_not_found_description": "현재 브랜치의 지식 베이스에 이 파일이나 폴더가 없습니다.",
     "directory_empty": "이 폴더는 비어 있습니다",
-    "directory_empty_hint": "현재 브랜치에 여기에 파일이 없습니다."
+    "directory_empty_hint": "현재 브랜치에 여기에 파일이 없습니다.",
+    "all_dot_hidden_description": "점(.)으로 시작하는 항목 숨기기로 모든 파일이 가려졌습니다. 끄면 전체 트리를 볼 수 있습니다."
   }
 }

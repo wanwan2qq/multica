@@ -15,6 +15,8 @@
     "search_placeholder": "过滤文件…",
     "search_aria": "过滤知识库文件",
     "search_clear": "清除过滤",
+    "hide_dot_prefixed": "隐藏 . 开头项",
+    "hide_dot_prefixed_aria": "隐藏以点号开头的文件和文件夹",
     "refresh": "刷新",
     "refresh_aria": "从 Git 刷新知识库",
     "copy_path": "复制路径",
@@ -40,6 +42,7 @@
     "path_not_found_title": "找不到此路径",
     "path_not_found_description": "当前分支的知识库中没有这个文件或文件夹。",
     "directory_empty": "此文件夹为空",
-    "directory_empty_hint": "当前分支下这里没有文件。"
+    "directory_empty_hint": "当前分支下这里没有文件。",
+    "all_dot_hidden_description": "所有文件都被「隐藏 . 开头项」过滤掉了。关闭开关即可浏览完整目录。"
   }
 }
