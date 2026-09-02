@@ -2,7 +2,7 @@
 # Build Multica Desktop and publish installers to wanwan2qq/multica GitHub Releases.
 #
 # Usage:
-#   export GH_TOKEN=ghp_...   # or GITHUB_TOKEN, needs repo scope
+#   export GH_TOKEN=ghp_...   # optional if `gh auth login` is active
 #   ./scripts/desktop-release-fork.sh --mac --arm64 --publish always
 #   ./scripts/desktop-release-fork.sh --mac --arm64 --mac --x64 --publish always
 #   ./scripts/desktop-release-fork.sh --mac --arm64 --publish never   # local only
@@ -15,8 +15,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DESKTOP="$ROOT/apps/desktop"
 
 if [[ "${GH_TOKEN:-}" == "" && "${GITHUB_TOKEN:-}" == "" ]]; then
-  echo "error: set GH_TOKEN or GITHUB_TOKEN (repo scope) to publish to GitHub Releases" >&2
-  exit 1
+  if command -v gh >/dev/null 2>&1 && gh auth token >/dev/null 2>&1; then
+    GH_TOKEN="$(gh auth token)"
+    echo "[desktop-release-fork] using GitHub token from gh auth login" >&2
+  else
+    echo "error: set GH_TOKEN or GITHUB_TOKEN (repo scope), or run gh auth login" >&2
+    exit 1
+  fi
 fi
 
 export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
