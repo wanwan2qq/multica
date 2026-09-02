@@ -51,6 +51,12 @@ const ctx = vi.hoisted(() => {
   };
 });
 
+const schedulePostQuitInstall = vi.hoisted(() => vi.fn(() => false));
+
+vi.mock("./updater-install-darwin", () => ({
+  tryScheduleDarwinPostQuitInstallFromApp: schedulePostQuitInstall,
+}));
+
 vi.mock("electron-updater", () => {
   const autoUpdater = {
     autoDownload: false,
@@ -117,6 +123,17 @@ describe("installDownloadedUpdateAndQuit", () => {
     ctx.getAllWindows.mockClear();
     ctx.quitAndInstall.mockClear();
     ctx.getAllWindows.mockReturnValue([]);
+    schedulePostQuitInstall.mockReset().mockReturnValue(false);
+  });
+
+  it("uses the post-quit zip installer on macOS when available", () => {
+    schedulePostQuitInstall.mockReturnValue(true);
+
+    installDownloadedUpdateAndQuit("darwin");
+
+    expect(schedulePostQuitInstall).toHaveBeenCalledTimes(1);
+    expect(ctx.appExit).toHaveBeenCalledWith(0);
+    expect(ctx.quitAndInstall).not.toHaveBeenCalled();
   });
 
   it("clears macOS quit hooks and retriggers Squirrel before quitAndInstall", () => {

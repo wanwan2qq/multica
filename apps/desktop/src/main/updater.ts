@@ -16,6 +16,7 @@ import {
   saveUpdaterPreferences,
   updaterPreferencesPath,
 } from "./updater-preferences";
+import { tryScheduleDarwinPostQuitInstallFromApp } from "./updater-install-darwin";
 
 // Silent background updates: electron-updater downloads on its own as soon
 // as `update-available` fires; we only surface UI when the package is fully
@@ -132,14 +133,6 @@ function prepareDarwinForUpdateInstall(): void {
   app.removeAllListeners("before-quit");
   app.removeAllListeners("window-all-closed");
 
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (window.isDestroyed()) continue;
-    window.removeAllListeners("close");
-    window.close();
-  }
-
-  // electron-builder#8997: without this, before-quit handlers can prevent ShipIt
-  // from replacing the app bundle even after quitAndInstall() is called.
   squirrelAutoUpdater.once("before-quit-for-update", () => {
     app.exit(0);
   });
@@ -148,8 +141,9 @@ function prepareDarwinForUpdateInstall(): void {
 /**
  * macOS Squirrel installs in two stages: electron-updater downloads the zip
  * (update-downloaded → UI shows "Update ready"), then the native autoUpdater
- * fetches from a local proxy and ShipIt swaps /Applications/Multica.app. If
- * stage two never completes, quitAndInstall() is a no-op and the prompt loops.
+ * fetches from a local proxy and ShipIt swaps the app bundle. Adhoc-signed
+ * fork builds often stall at stage two — the window closes but ShipIt never
+ * runs. Fall back to installing the cached update.zip after the process exits.
  */
 export function installDownloadedUpdateAndQuit(
   platform: NodeJS.Platform = process.platform,
@@ -158,10 +152,24 @@ export function installDownloadedUpdateAndQuit(
 
   if (platform === "darwin") {
     prepareDarwinForUpdateInstall();
-    squirrelAutoUpdater.once("update-downloaded", () => {
+
+    if (tryScheduleDarwinPostQuitInstallFromApp()) {
+      app.exit(0);
+      return;
+    }
+
+    let installStarted = false;
+    const runInstall = () => {
+      if (installStarted) return;
+      installStarted = true;
       autoUpdater.quitAndInstall(false, true);
-    });
+      setTimeout(() => app.exit(0), 2000);
+    };
+
+    squirrelAutoUpdater.once("update-downloaded", runInstall);
     squirrelAutoUpdater.checkForUpdates();
+    runInstall();
+    return;
   }
 
   autoUpdater.quitAndInstall(false, true);
