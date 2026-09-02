@@ -52,7 +52,7 @@ import {
   isAuthStatusError,
   type AuthProbeResult,
 } from "./daemon-auth-probe";
-import { isUpdateInstallInProgress } from "./updater";
+import { isUpdateInstallInProgress, isUpdateReadyToInstall } from "./updater";
 
 const POLL_INTERVAL_MS = 5_000;
 const PREFS_PATH = join(homedir(), ".multica", "desktop_prefs.json");
@@ -1480,7 +1480,7 @@ export function setupDaemonManager(
 
   let isQuitting = false;
   app.on("before-quit", (event) => {
-    if (isQuitting || isUpdateInstallInProgress()) return;
+    if (isQuitting || isUpdateInstallInProgress() || isUpdateReadyToInstall()) return;
     setDesiredDaemonRunning(false);
     stopPolling();
     stopLogTail();
