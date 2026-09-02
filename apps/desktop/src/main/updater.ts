@@ -22,7 +22,9 @@ import { tryScheduleDarwinPostQuitInstallFromApp } from "./updater-install-darwi
 // as `update-available` fires; we only surface UI when the package is fully
 // downloaded and ready to install on next quit.
 autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = true;
+// macOS fork builds install from the cached update.zip after quit (see
+// updater-install-darwin.ts). Squirrel/ShipIt is unreliable when adhoc-signed.
+autoUpdater.autoInstallOnAppQuit = process.platform !== "darwin";
 
 // Windows arm64 ships its own update metadata channel because
 // electron-builder's `latest.yml` is not arch-suffixed on Windows — both
@@ -123,10 +125,16 @@ function checkForUpdatesOnce(): Promise<unknown> {
 }
 
 let updateInstallInProgress = false;
+let updateReadyToInstall = false;
 
 /** True while quit-and-install is in flight; daemon quit hooks must not block it. */
 export function isUpdateInstallInProgress(): boolean {
   return updateInstallInProgress;
+}
+
+/** True after an update package finished downloading and is waiting for quit. */
+export function isUpdateReadyToInstall(): boolean {
+  return updateReadyToInstall;
 }
 
 function prepareDarwinForUpdateInstall(): void {
@@ -136,6 +144,14 @@ function prepareDarwinForUpdateInstall(): void {
   squirrelAutoUpdater.once("before-quit-for-update", () => {
     app.exit(0);
   });
+}
+
+function scheduleDarwinInstallOnQuit(
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  if (platform !== "darwin" || !app.isPackaged) return false;
+  prepareDarwinForUpdateInstall();
+  return tryScheduleDarwinPostQuitInstallFromApp();
 }
 
 /**
@@ -149,11 +165,10 @@ export function installDownloadedUpdateAndQuit(
   platform: NodeJS.Platform = process.platform,
 ): void {
   updateInstallInProgress = true;
+  updateReadyToInstall = false;
 
   if (platform === "darwin") {
-    prepareDarwinForUpdateInstall();
-
-    if (tryScheduleDarwinPostQuitInstallFromApp()) {
+    if (scheduleDarwinInstallOnQuit(platform)) {
       app.exit(0);
       return;
     }
@@ -251,6 +266,7 @@ export function setupAutoUpdater(getMainWindow: () => BrowserWindowType | null):
   });
 
   autoUpdater.on("update-downloaded", (info: UpdateDownloadedEvent) => {
+    updateReadyToInstall = true;
     sendToLiveRenderer(getMainWindow(), "updater:update-downloaded", {
       version: info.version,
       releaseNotes: info.releaseNotes,
@@ -269,6 +285,16 @@ export function setupAutoUpdater(getMainWindow: () => BrowserWindowType | null):
 
   ipcMain.handle("updater:install", () => {
     installDownloadedUpdateAndQuit();
+  });
+
+  // Cmd+Q after a macOS update finished downloading: install from the cached
+  // zip once the process exits (Squirrel/ShipIt is skipped — see autoInstallOnAppQuit).
+  app.on("before-quit", () => {
+    if (!updateReadyToInstall || updateInstallInProgress) return;
+    if (scheduleDarwinInstallOnQuit()) {
+      updateInstallInProgress = true;
+      updateReadyToInstall = false;
+    }
   });
 
   ipcMain.handle(
