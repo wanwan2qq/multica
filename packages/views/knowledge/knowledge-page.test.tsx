@@ -521,6 +521,47 @@ describe("KnowledgePage", () => {
     );
   });
 
+  it("shows a directory listing when ?path= points at a folder", () => {
+    searchRef.current = new URLSearchParams("path=notes");
+    branchesRef.current = {
+      isFetching: false,
+      isPending: false,
+      isError: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
+    treeRef.current = {
+      isFetching: false,
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [
+          { path: "notes/foo.md", type: "blob" },
+          { path: "notes/sub/bar.md", type: "blob" },
+          { path: "README.md", type: "blob" },
+        ],
+      },
+      error: null,
+    };
+    fileRef.current = {
+      isPending: false,
+      isError: true,
+      isFetching: false,
+      data: undefined,
+      error: new ApiError("missing", 404, "Not Found"),
+    };
+    renderPage();
+    expect(screen.getByRole("heading", { name: "notes" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /foo\.md/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^sub$/ })).toBeTruthy();
+    expect(screen.queryByText("# Hello KB")).toBeNull();
+  });
+
   it("invalidates all knowledge queries when Refresh is clicked", async () => {
     const user = userEvent.setup();
     branchesRef.current = {

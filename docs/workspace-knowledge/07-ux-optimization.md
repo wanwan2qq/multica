@@ -96,4 +96,19 @@ Phase 3 知识库浏览页面的交互与视觉优化。全部改动在 `package
 
 ## 上游同步影响
 
-**零影响。** 本次优化所有改动均在 `packages/views/knowledge/` 目录内，该目录在上游不存在。没有新增任何 KB-HOOK 补丁到上游文件。后续 rebase 不会产生冲突。
+**本文件描述的树/浏览页子功能：零影响。** 改动均在 `packages/views/knowledge/` 目录内，该目录在上游不存在，没有新增 KB-HOOK 补丁，后续 rebase 不冲突。
+
+**注意：`[[路径]]` 知识库引用功能不再零足迹。** 任务/回复正文里的 `[[路径]]` 跳转（`kb:` scheme）虽是纯前端，但要复用 `linkify` 的跳过逻辑、并让只读渲染器与编辑器命中同一条分发路径，它在 6 个上游文件各加了 1~5 行 `// KB-HOOK:` 接线，核心逻辑全部放在新文件 `packages/ui/markdown/knowledge-links.ts`：
+
+| 上游文件 | 新增？ | KB-HOOK 接线 |
+|------|------|------|
+| `packages/ui/markdown/index.ts` | 否 | 导出 `preprocessKnowledgeLinks`（+1 行） |
+| `packages/ui/markdown/sanitize.ts` | 否 | `protocols.href` 白名单加 `kb`；`markdownUrlTransform` 加 `kb:` 透传 |
+| `packages/views/editor/utils/link-handler.ts` | 否 | `openLink` 顶部 `kb:` 分支 → `/{slug}/knowledge?path=`；slug 前缀匹配改为按 pathname 匹配（query 不再漏进首段） |
+| `packages/views/rich-content/rich-content.tsx` | 否 | 渲染前先跑 `preprocessKnowledgeLinks` |
+| `packages/views/issues/components/issue-detail.tsx` | 否 | 描述文档载入时对 `issue.description` 做 `preprocessKnowledgeLinks` |
+| `packages/views/editor/extensions/index.ts` | 否 | `Link` 配置 `protocols: ["kb"]`（否则 Tiptap `isAllowedUri` 会把 `kb:` 渲染成 `<a href="">`，链接失效）；注册 `KnowledgeLinkInputRule` |
+| `packages/views/editor/extensions/knowledge-link-input-rule.ts` | 是 | 边打字边把 `[[路径]]` 转成 `kb:` 链接（描述编辑器非受控，仅 mount 预处理不够），在 `index.ts` 注册 |
+| `packages/views/editor/extensions/knowledge-link-input-rule.test.ts` | 是 | InputRule + mount 解析路径测试 |
+
+rebase 冲突只可能落在这 8 处（6 处 KB-HOOK + 2 处新增文件），均可 `grep KB-HOOK` 定位；后端 / DB / 接口零改动。

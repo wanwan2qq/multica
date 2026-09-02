@@ -259,13 +259,24 @@ export function openLink(
   appOrigin?: string | null,
   intent: LinkClickIntent = "push",
 ): void {
+  // KB-HOOK: knowledge-link scheme (`kb:<repo path>`) → jump to the workspace
+  // knowledge base at that file. Rewritten to a workspace-scoped path so the
+  // prefix logic below (and its slug-resolution) applies unchanged.
+  if (href.startsWith("kb:")) {
+    const kbPath = decodeURIComponent(href.slice(3)).replace(/^\/+/, "");
+    href = `/knowledge?path=${encodeURIComponent(kbPath)}`;
+  }
   const internalPath = href.startsWith("/")
     ? href
     : toInternalAppPath(href, appOrigin);
   if (internalPath) {
     let path = internalPath;
     if (currentSlug && !isGlobalPath(path)) {
-      const firstSegment = path.split("/")[1];
+      // Match on the pathname only. A kb:-rewritten href carries a query
+      // (`/knowledge?path=docs/foo.md`) and `split("/")[1]` would otherwise hand
+      // "knowledge?path=…" to the route check. Stripping `?…`/`#…` first keeps
+      // the segment the knowledge route is actually keyed on. KB-HOOK:
+      const firstSegment = (path.split("/")[1] ?? "").split(/[?#]/)[0];
       if (firstSegment && WORKSPACE_ROUTE_SEGMENTS.has(firstSegment)) {
         // Path looks like /issues/abc (no slug) — prepend current slug.
         path = `/${currentSlug}${path}`;

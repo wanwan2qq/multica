@@ -23,7 +23,6 @@ import type { RefObject } from "react";
 import StarterKit from "@tiptap/starter-kit";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Placeholder from "@tiptap/extension-placeholder";
-import Link from "@tiptap/extension-link";
 import Typography from "@tiptap/extension-typography";
 import Image from "@tiptap/extension-image";
 import TableRow from "@tiptap/extension-table-row";
@@ -39,6 +38,8 @@ import { shouldAutoLink } from "@multica/ui/markdown";
 import { escapeMarkdownLabel } from "../utils/escape-markdown-label";
 import { BaseMentionExtension } from "./mention-extension";
 import { createMentionSuggestion, type MentionItem } from "./mention-suggestion";
+import { KnowledgeLinkInputRule } from "./knowledge-link-input-rule";
+import { KnowledgeLinkMarkdown, KnowledgeLinkMarkdownLink } from "./knowledge-link-markdown";
 import {
   createIssueIdentifierAutolinkExtension,
   type IssueIdentifierResolver,
@@ -60,12 +61,17 @@ import { BlockMathExtension, InlineMathExtension } from "./math";
 import { HighlightExtension } from "./highlight";
 import { codeLowlight } from "../syntax-highlight";
 
-const LinkExtension = Link.extend({ inclusive: false }).configure({
+const LinkExtension = KnowledgeLinkMarkdownLink.configure({
   openOnClick: false,
   autolink: true,
   linkOnPaste: true,
   defaultProtocol: "https",
   shouldAutoLink,
+  // KB-HOOK: allow the knowledge-link scheme (`kb:<repo path>`) through Tiptap's
+  // isAllowedUri, so a `[path](kb:path)` parsed into a link mark renders with a
+  // real href and stays clickable. Without this the mark renders `<a href="">`
+  // (isAllowedUri rejects any scheme not in its default allowlist).
+  protocols: ["kb"],
 });
 
 export const ImageExtension = Image.extend({
@@ -238,6 +244,12 @@ export function createEditorExtensions(
     // linkOnPaste relies on Link's handlePaste plugin firing first;
     // markdownPaste's handlePaste is a catch-all that returns true.
     LinkExtension,
+    // Parse literal `[[path]]` that bypassed string preprocessing.
+    KnowledgeLinkMarkdown,
+    // Live `[[path]]` → `kb:` link while typing (the description editor is
+    // uncontrolled, so the mount-time preprocessing alone would leave a
+    // reference typed after mount literal until reload).
+    KnowledgeLinkInputRule,
     ImageExtension,
     // renderWrapper wraps the table in `<div class="tableWrapper">` (the same
     // wrapper the resizable NodeView emits), which prose.css styles with

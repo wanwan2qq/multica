@@ -16,7 +16,13 @@
     "search_aria": "ナレッジベースファイルを絞り込み",
     "search_clear": "フィルターをクリア",
     "refresh": "更新",
-    "refresh_aria": "Git からナレッジを再取得"
+    "refresh_aria": "Git からナレッジを再取得",
+    "copy_path": "パスをコピー",
+    "copy_wiki_link": "[[path]] としてコピー",
+    "copy_path_aria": "ファイルパスをコピー",
+    "toast_path_copied": "パスをコピーしました",
+    "toast_wiki_link_copied": "参照をコピーしました",
+    "directory_item_count_other": "{{count}} 件"
   },
   "empty": {
     "not_configured_title": "ナレッジリポジトリが未設定です",
@@ -30,6 +36,10 @@
     "load_error_title": "ナレッジを読み込めませんでした",
     "load_error_fallback": "Git ホストがツリーを返しませんでした。URL と権限を確認してください。",
     "no_match": "一致するファイルがありません",
-    "match_count_other": "{{count}} 件のファイルが一致"
+    "match_count_other": "{{count}} 件のファイルが一致",
+    "path_not_found_title": "パスが見つかりません",
+    "path_not_found_description": "現在のブランチのナレッジベースに、このファイルまたはフォルダはありません。",
+    "directory_empty": "このフォルダは空です",
+    "directory_empty_hint": "現在のブランチにはここにファイルがありません。"
   }
 }

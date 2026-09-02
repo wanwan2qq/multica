@@ -35,11 +35,16 @@ export function knowledgeTreeOptions(wsId: string, ref: string) {
   });
 }
 
-export function knowledgeFileOptions(wsId: string, ref: string, path: string) {
+export function knowledgeFileOptions(
+  wsId: string,
+  ref: string,
+  path: string,
+  opts?: { enabled?: boolean },
+) {
   return queryOptions({
     queryKey: knowledgeKeys.file(wsId, ref, path),
     queryFn: () => api.getKnowledgeFile(wsId, path, ref),
-    enabled: wsId.length > 0 && path.length > 0,
+    enabled: wsId.length > 0 && path.length > 0 && (opts?.enabled ?? true),
     retry: retryUnlessUnconfigured,
   });
 }

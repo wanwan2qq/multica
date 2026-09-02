@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -17,12 +17,21 @@ import {
   ChevronsUpDown,
   Search,
   X,
+  Copy,
+  Brackets,
 } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import { Input } from "@multica/ui/components/ui/input";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@multica/ui/components/ui/context-menu";
 import { isImeComposing } from "@multica/core/utils";
 import { useT } from "../i18n";
 import { useTreeExpandStore, type TreeExpandStore } from "@multica/core/knowledge/stores/tree-expand-store";
+import { useKnowledgePathCopy } from "./use-knowledge-path-copy";
 
 // ---------------------------------------------------------------------------
 // Tree data structures
@@ -150,12 +159,39 @@ const EXT_BADGE_CLASS: Record<FileIconKind, string> = {
   config: "text-amber-600/70",
   image: "text-emerald-600/70",
   style: "text-pink-600/70",
-  generic: "text-muted-foreground/60",
+  generic: "text-muted-foreground",
 };
 
 // ---------------------------------------------------------------------------
 // Tree node renderer
 // ---------------------------------------------------------------------------
+
+function TreeNodeContextMenu({
+  path,
+  children,
+}: {
+  path: string;
+  children: ReactElement;
+}) {
+  const { t } = useT("knowledge");
+  const { copyPath, copyWikiLink } = useKnowledgePathCopy();
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger render={children} />
+      <ContextMenuContent className="w-52">
+        <ContextMenuItem onClick={() => void copyPath(path)}>
+          <Copy className="size-3.5" />
+          {t(($) => $.page.copy_path)}
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => void copyWikiLink(path)}>
+          <Brackets className="size-3.5" />
+          {t(($) => $.page.copy_wiki_link)}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
 
 function TreeNodeItem({
   node,
@@ -182,25 +218,42 @@ function TreeNodeItem({
 
     return (
       <div>
-        <button
-          type="button"
-          onClick={() => onToggle(node.path)}
-          className={cn(
-            "flex h-8 w-full items-center gap-1.5 rounded-md pr-2.5 text-left text-caption transition-colors",
-            "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          )}
-          style={{ paddingLeft: `${depth * 12 + 10}px` }}
-        >
-          <ChevronIcon className="h-3 w-3 shrink-0" />
-          <FolderIcon className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-          <span className="truncate text-xs font-medium">{node.name}</span>
-          {node.children.length > 0 && (
-            <span className="ml-auto shrink-0 text-[10px] leading-none text-faint-foreground tabular-nums">
-              {node.children.length}
-            </span>
-          )}
-        </button>
+        <TreeNodeContextMenu path={node.path}>
+          <div
+            className={cn(
+              "flex h-8 w-full items-center gap-1.5 rounded-md pr-2.5 text-left text-caption transition-colors",
+              isSelected
+                ? "bg-surface-selected font-medium text-surface-selected-foreground"
+                : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+            )}
+            style={{ paddingLeft: `${depth * 12 + 10}px` }}
+          >
+            <button
+              type="button"
+              aria-label={expanded ? "Collapse folder" : "Expand folder"}
+              onClick={() => onToggle(node.path)}
+              className="flex shrink-0 items-center rounded p-0.5 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronIcon className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!expanded) onToggle(node.path);
+                onSelect(node.path);
+              }}
+              className="flex min-w-0 flex-1 items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+            >
+              <FolderIcon className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+              <span className="truncate text-caption font-medium">{node.name}</span>
+              {node.children.length > 0 && (
+                <span className="ml-auto shrink-0 text-micro leading-none text-faint-foreground tabular-nums">
+                  {node.children.length}
+                </span>
+              )}
+            </button>
+          </div>
+        </TreeNodeContextMenu>
         {expanded && (
           <div>
             {node.children.map((child) => (
@@ -244,28 +297,30 @@ function TreeNodeItem({
   })();
 
   return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={isSelected}
-      onClick={() => onSelect(node.path)}
-      className={cn(
-        "flex h-8 w-full items-center gap-2 rounded-md pr-2.5 text-left text-caption transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        isSelected
-          ? "bg-surface-selected font-medium text-surface-selected-foreground"
-          : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
-      )}
-      style={{ paddingLeft: `${depth * 12 + 10}px` }}
-    >
-      <IconComponent className={cn("h-3.5 w-3.5 shrink-0", ICON_CLASS[kind])} />
-      <span className="truncate text-xs">{node.name}</span>
-      {ext && (
-        <span className={cn("ml-auto shrink-0 text-[10px] leading-none tabular-nums", EXT_BADGE_CLASS[kind])}>
-          {ext}
-        </span>
-      )}
-    </button>
+    <TreeNodeContextMenu path={node.path}>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={isSelected}
+        onClick={() => onSelect(node.path)}
+        className={cn(
+          "flex h-8 w-full items-center gap-2 rounded-md pr-2.5 text-left text-caption transition-colors",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          isSelected
+            ? "bg-surface-selected font-medium text-surface-selected-foreground"
+            : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+        )}
+        style={{ paddingLeft: `${depth * 12 + 10}px` }}
+      >
+        <IconComponent className={cn("h-3.5 w-3.5 shrink-0", ICON_CLASS[kind])} />
+        <span className="truncate text-caption">{node.name}</span>
+        {ext && (
+          <span className={cn("ml-auto shrink-0 text-micro leading-none tabular-nums", EXT_BADGE_CLASS[kind])}>
+            {ext}
+          </span>
+        )}
+      </button>
+    </TreeNodeContextMenu>
   );
 }
 
@@ -386,7 +441,7 @@ export function KnowledgeTree({
   return (
     <div className="flex flex-col gap-0.5">
       <div className="flex items-center justify-between gap-2 px-2.5 pb-1.5">
-        <span className="text-[11px] font-medium text-faint-foreground uppercase tracking-wider">
+        <span className="text-micro font-medium text-faint-foreground uppercase tracking-wider">
           {t(($) => $.page.tree_title)}
         </span>
         <button
@@ -502,7 +557,7 @@ function SearchInput({
           onCompositionEnd={handleCompositionEnd}
           placeholder={placeholder}
           aria-label={ariaLabel}
-          className="h-7 border-0 bg-muted/50 pl-7 pr-7 text-xs shadow-none placeholder:text-muted-foreground/70 focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring/30"
+          className="h-7 border-0 bg-muted/50 pl-7 pr-7 text-caption shadow-none placeholder:text-muted-foreground focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring/30"
         />
         {hasValue && (
           <button
