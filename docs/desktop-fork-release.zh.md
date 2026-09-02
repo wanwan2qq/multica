@@ -38,6 +38,7 @@ v<主>.<次>.<补丁>-kb<序号>
 3. **未打 tag 的本地包**会带 commit 后缀（如 `0.4.28-kb1-7-g895a9c1a1`），仅适合内测，不作为自动更新目标。
 4. **版本号来源**：`git describe --tags --match 'v[0-9]*'`，见 `apps/desktop/scripts/package.mjs`。`package.json` 里的 `0.1.0` 是占位，打包时会被覆盖。
 5. **自动更新**：`electron-updater` 按 semver 比较；新版本必须 **大于** 已安装版本才会提示更新。
+6. **kb 渠道桥接**：若团队仍停留在 `-kb2` 且无法跨渠道看到 `-kb4`/`-kb5`，可发 **同后缀、更高版本号** 的桥接包（如 `v0.4.38-kb2`），并在 GitHub 上设为 **Latest**；用户自动升到桥接包后，后续 `-kbN` 发版恢复正常。桥接包须含 `updater.ts` 中 `allowPrerelease = false` 修复。
 
 ### 与官方版本的关系
 
@@ -152,6 +153,7 @@ CSC_IDENTITY_AUTO_DISCOVERY=false pnpm package -- --mac --arm64 --publish never
 |------|-------------|
 | 检查更新仍指向官方 | 安装包是改 `publish` 之前打的；需重装 fork 包 |
 | 有新版但不提示更新 | 新版本号未大于当前版（semver）；或 Release 缺少 `latest-mac.yml` |
+| kb2 检查更新显示已是最新、但 GitHub 已有 kb4 | electron-updater 把 `-kb2`/`-kb4` 当成不同预发布渠道；发 **桥接包** `v0.4.38-kb2`（同 `-kb2` 后缀、更高 semver、含 updater 修复）可让旧 kb2 自动升级；或手动装带修复的包 |
 | `publish` 失败 401 / Bad credentials | 未设置 `GH_TOKEN`；运行 `export GH_TOKEN=$(gh auth token)` 或 `gh auth login`，或直接 `./scripts/desktop-release-fork.sh`（会自动读 gh token） |
 | `publish` 失败 403 | `GH_TOKEN` 无 `repo` 权限，或 token 不属于 `wanwan2qq` |
 | macOS 提示无法验证开发者 | 未签名包；右键打开或 `xattr -cr /Applications/Multica.app` |
