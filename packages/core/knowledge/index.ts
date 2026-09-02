@@ -33,3 +33,10 @@ export {
   isKnowledgeDescription,
   pickKnowledgeRepo,
 } from "./pick-repo";
+export {
+  knowledgePathAncestorDirs,
+  listKnowledgeDirectoryChildren,
+  normalizeKnowledgePath,
+  resolveKnowledgePath,
+  type KnowledgePathKind,
+} from "./path-resolver";

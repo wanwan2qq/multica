@@ -7,6 +7,7 @@ export {
   isIssueIdentifier,
   ISSUE_IDENTIFIER_PATTERN,
 } from './issue-identifiers'
+export { preprocessKnowledgeLinks } from './knowledge-links' // KB-HOOK: fork knowledge link scheme
 export { preprocessMentionShortcodes } from './mentions'
 export { markdownSanitizeSchema, markdownUrlTransform } from './sanitize'
 export {
