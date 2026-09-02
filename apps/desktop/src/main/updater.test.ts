@@ -28,6 +28,7 @@ vi.mock("electron-updater", () => {
     autoInstallOnAppQuit: false,
     channel: undefined as string | undefined,
     allowDowngrade: false,
+    allowPrerelease: true,
     on: vi.fn((event: string, handler: Handler) => {
       const handlers = ctx.handlers.get(event) ?? [];
       handlers.push(handler);
@@ -57,6 +58,13 @@ import {
   setupAutoUpdater,
 } from "./updater";
 import { updaterPreferencesPath } from "./updater-preferences";
+import { autoUpdater } from "electron-updater";
+
+describe("fork kb release line", () => {
+  it("follows GitHub /releases/latest instead of isolating -kbN prerelease channels", () => {
+    expect(autoUpdater.allowPrerelease).toBe(false);
+  });
+});
 
 describe("macOS x64 update channel", () => {
   it("does not touch established architecture paths", () => {
