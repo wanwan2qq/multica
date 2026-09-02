@@ -11,6 +11,7 @@ type CheckState =
   | { status: "checking" }
   | { status: "up-to-date" }
   | { status: "available"; latestVersion: string }
+  | { status: "ready"; latestVersion: string }
   | { status: "error"; message: string };
 
 export function UpdatesSettingsTab() {
@@ -19,6 +20,7 @@ export function UpdatesSettingsTab() {
   const [automaticUpdates, setAutomaticUpdates] = useState(true);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [savingPreference, setSavingPreference] = useState(false);
+  const [installing, setInstalling] = useState(false);
   const currentVersion = window.desktopAPI.appInfo.version;
 
   useEffect(() => {
@@ -40,6 +42,31 @@ export function UpdatesSettingsTab() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const cleanups = [
+      window.updater.onUpdateAvailable((info) => {
+        setState({ status: "available", latestVersion: info.version });
+      }),
+      window.updater.onUpdateDownloaded((info) => {
+        setState({ status: "ready", latestVersion: info.version });
+      }),
+    ];
+    return () => {
+      for (const cleanup of cleanups) cleanup();
+    };
+  }, []);
+
+  const handleInstall = useCallback(async () => {
+    if (installing) return;
+    setInstalling(true);
+    try {
+      await window.updater.installUpdate();
+    } catch {
+      setInstalling(false);
+      toast.error(t(($) => $.desktop.updates.restart_failed));
+    }
+  }, [installing, t]);
 
   const handleAutomaticUpdatesChange = useCallback(
     async (enabled: boolean) => {
@@ -117,6 +144,14 @@ export function UpdatesSettingsTab() {
                   })}
                 </p>
               )}
+              {state.status === "ready" && (
+                <p className="mt-2 inline-flex items-center gap-1.5">
+                  <Check className="size-3.5 text-success" />
+                  {t(($) => $.desktop.updates.ready_to_install, {
+                    version: state.latestVersion,
+                  })}
+                </p>
+              )}
               {state.status === "error" && (
                 <p className="mt-2 inline-flex items-center gap-1.5 text-destructive">
                   <AlertCircle className="size-3.5" />
@@ -126,21 +161,34 @@ export function UpdatesSettingsTab() {
             </>
           }
         >
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCheck}
-            disabled={state.status === "checking"}
-          >
-            {state.status === "checking" ? (
-              <>
-                <Loader2 className="size-3.5 animate-spin" />
-                {t(($) => $.desktop.updates.checking)}
-              </>
-            ) : (
-              t(($) => $.desktop.updates.check_now)
+          <div className="flex flex-col items-end gap-2">
+            {state.status === "ready" && (
+              <Button
+                size="sm"
+                onClick={() => void handleInstall()}
+                disabled={installing}
+              >
+                {installing
+                  ? t(($) => $.desktop.updates.restarting)
+                  : t(($) => $.desktop.updates.restart_now)}
+              </Button>
             )}
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCheck}
+              disabled={state.status === "checking"}
+            >
+              {state.status === "checking" ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {t(($) => $.desktop.updates.checking)}
+                </>
+              ) : (
+                t(($) => $.desktop.updates.check_now)
+              )}
+            </Button>
+          </div>
         </SettingsRow>
       </SettingsCard>
     </SettingsTab>

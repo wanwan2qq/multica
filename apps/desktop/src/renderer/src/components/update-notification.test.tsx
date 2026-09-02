@@ -6,6 +6,13 @@ import { UpdateNotification } from "./update-notification";
 const mocks = vi.hoisted(() => ({
   installUpdate: vi.fn(),
   openExternal: vi.fn(),
+  toastError: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: mocks.toastError,
+  },
 }));
 
 type UpdateDownloadedListener = (info: {
@@ -19,6 +26,7 @@ describe("UpdateNotification", () => {
   beforeEach(() => {
     mocks.installUpdate.mockReset().mockResolvedValue(undefined);
     mocks.openExternal.mockReset().mockResolvedValue(undefined);
+    mocks.toastError.mockReset();
 
     Object.defineProperty(window, "desktopAPI", {
       configurable: true,
