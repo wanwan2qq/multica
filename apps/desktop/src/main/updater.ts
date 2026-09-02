@@ -1,5 +1,11 @@
 import { autoUpdater, type UpdateDownloadedEvent } from "electron-updater";
-import { app, type BrowserWindow, type MessageBoxOptions, ipcMain } from "electron";
+import {
+  app,
+  autoUpdater as squirrelAutoUpdater,
+  BrowserWindow,
+  ipcMain,
+  type MessageBoxOptions,
+} from "electron";
 import type {
   ManualUpdateCheckResult,
   UpdaterPreferences,
@@ -154,6 +160,52 @@ function checkForUpdatesOnce(): Promise<unknown> {
   return p;
 }
 
+let updateInstallInProgress = false;
+
+/** True while quit-and-install is in flight; daemon quit hooks must not block it. */
+export function isUpdateInstallInProgress(): boolean {
+  return updateInstallInProgress;
+}
+
+function prepareDarwinForUpdateInstall(): void {
+  app.removeAllListeners("before-quit");
+  app.removeAllListeners("window-all-closed");
+
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed()) continue;
+    window.removeAllListeners("close");
+    window.close();
+  }
+
+  // electron-builder#8997: without this, before-quit handlers can prevent ShipIt
+  // from replacing the app bundle even after quitAndInstall() is called.
+  squirrelAutoUpdater.once("before-quit-for-update", () => {
+    app.exit(0);
+  });
+}
+
+/**
+ * macOS Squirrel installs in two stages: electron-updater downloads the zip
+ * (update-downloaded → UI shows "Update ready"), then the native autoUpdater
+ * fetches from a local proxy and ShipIt swaps /Applications/Multica.app. If
+ * stage two never completes, quitAndInstall() is a no-op and the prompt loops.
+ */
+export function installDownloadedUpdateAndQuit(
+  platform: NodeJS.Platform = process.platform,
+): void {
+  updateInstallInProgress = true;
+
+  if (platform === "darwin") {
+    prepareDarwinForUpdateInstall();
+    squirrelAutoUpdater.once("update-downloaded", () => {
+      autoUpdater.quitAndInstall(false, true);
+    });
+    squirrelAutoUpdater.checkForUpdates();
+  }
+
+  autoUpdater.quitAndInstall(false, true);
+}
+
 export function setupAutoUpdater(
   getMainWindow: () => BrowserWindow | null,
   options: SetupAutoUpdaterOptions = {},
@@ -238,7 +290,7 @@ export function setupAutoUpdater(
       autoUpdater.autoInstallOnAppQuit = previousAutoInstall;
       daemonGate?.resumeAfterAbortedInstall();
     }, INSTALL_QUIT_WATCHDOG_MS);
-    if (install && manual) autoUpdater.quitAndInstall(false, true);
+    if (install && manual) installDownloadedUpdateAndQuit(platform);
     else app.quit();
   };
 
@@ -315,7 +367,7 @@ export function setupAutoUpdater(
 
   ipcMain.handle("updater:install", async () => {
     if (!daemonGate) {
-      autoUpdater.quitAndInstall(false, true);
+      installDownloadedUpdateAndQuit(platform);
       return;
     }
     await installWithDaemonGate(true);

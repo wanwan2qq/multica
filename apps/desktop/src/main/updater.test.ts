@@ -8,21 +8,50 @@ import { join } from "node:path";
 type Handler = (...args: unknown[]) => void;
 type IpcHandler = (...args: unknown[]) => unknown;
 
-const ctx = vi.hoisted(() => ({
-  handlers: new Map<string, Handler[]>(),
-  ipcHandlers: new Map<string, IpcHandler>(),
-  ipcHandle: vi.fn(),
-  checkForUpdates: vi.fn(async () => ({
-    updateInfo: { version: "0.3.18" },
-    isUpdateAvailable: false,
-  })),
-  downloadUpdate: vi.fn(),
-  quitAndInstall: vi.fn(),
-  getVersion: vi.fn(() => "0.3.17"),
-  appHandlers: new Map<string, Handler[]>(),
-  appQuit: vi.fn(),
-  userDataPath: "",
-}));
+const ctx = vi.hoisted(() => {
+  const squirrelHandlers = new Map<string, Handler[]>();
+  const squirrelCheckForUpdates = vi.fn();
+  const squirrelOnce = vi.fn((event: string, handler: Handler) => {
+    const handlers = squirrelHandlers.get(event) ?? [];
+    handlers.push(handler);
+    squirrelHandlers.set(event, handlers);
+    return squirrelAutoUpdater;
+  });
+  const squirrelAutoUpdater = {
+    once: squirrelOnce,
+    checkForUpdates: squirrelCheckForUpdates,
+  };
+
+  return {
+    handlers: new Map<string, Handler[]>(),
+    ipcHandlers: new Map<string, IpcHandler>(),
+    ipcHandle: vi.fn(),
+    checkForUpdates: vi.fn(async () => ({
+      updateInfo: { version: "0.3.18" },
+      isUpdateAvailable: false,
+    })),
+    downloadUpdate: vi.fn(),
+    quitAndInstall: vi.fn(),
+    getVersion: vi.fn(() => "0.3.17"),
+    appHandlers: new Map<string, Handler[]>(),
+    appQuit: vi.fn(),
+    userDataPath: "",
+    squirrelHandlers,
+    squirrelCheckForUpdates,
+    squirrelOnce,
+    squirrelAutoUpdater,
+    appRemoveAllListeners: vi.fn(),
+    appExit: vi.fn(),
+    getAllWindows: vi.fn(
+      () =>
+        [] as Array<{
+          isDestroyed: () => boolean;
+          removeAllListeners: ReturnType<typeof vi.fn>;
+          close: ReturnType<typeof vi.fn>;
+        }>,
+    ),
+  };
+});
 
 vi.mock("electron-updater", () => {
   const autoUpdater = {
@@ -54,8 +83,13 @@ vi.mock("electron", () => ({
       ctx.appHandlers.set(event, handlers);
     }),
     quit: ctx.appQuit,
+    removeAllListeners: ctx.appRemoveAllListeners,
+    exit: ctx.appExit,
   },
-  BrowserWindow: class BrowserWindow {},
+  autoUpdater: ctx.squirrelAutoUpdater,
+  BrowserWindow: {
+    getAllWindows: ctx.getAllWindows,
+  },
   ipcMain: {
     handle: ctx.ipcHandle,
   },
@@ -65,6 +99,8 @@ import { autoUpdater } from "electron-updater";
 import {
   configureMacX64UpdateChannel,
   createElectronBusyInstallPrompt,
+  installDownloadedUpdateAndQuit,
+  isUpdateInstallInProgress,
   setupAutoUpdater,
   type UpdaterDaemonGate,
 } from "./updater";
@@ -74,6 +110,60 @@ import { autoUpdater } from "electron-updater";
 describe("fork kb release line", () => {
   it("follows GitHub /releases/latest instead of isolating -kbN prerelease channels", () => {
     expect(autoUpdater.allowPrerelease).toBe(false);
+  });
+});
+
+describe("installDownloadedUpdateAndQuit", () => {
+  beforeEach(() => {
+    ctx.ipcHandlers.clear();
+    ctx.ipcHandle.mockClear();
+    ctx.ipcHandle.mockImplementation((channel: string, handler: IpcHandler) => {
+      ctx.ipcHandlers.set(channel, handler);
+    });
+    ctx.appRemoveAllListeners.mockClear();
+    ctx.appExit.mockClear();
+    ctx.squirrelCheckForUpdates.mockClear();
+    ctx.squirrelOnce.mockClear();
+    ctx.squirrelHandlers.clear();
+    ctx.getAllWindows.mockClear();
+    ctx.quitAndInstall.mockClear();
+    ctx.getAllWindows.mockReturnValue([]);
+  });
+
+  it("clears macOS quit hooks and retriggers Squirrel before quitAndInstall", () => {
+    installDownloadedUpdateAndQuit("darwin");
+
+    expect(isUpdateInstallInProgress()).toBe(true);
+    expect(ctx.appRemoveAllListeners).toHaveBeenCalledWith("before-quit");
+    expect(ctx.appRemoveAllListeners).toHaveBeenCalledWith("window-all-closed");
+    expect(ctx.squirrelOnce).toHaveBeenCalledWith(
+      "before-quit-for-update",
+      expect.any(Function),
+    );
+    expect(ctx.squirrelOnce).toHaveBeenCalledWith(
+      "update-downloaded",
+      expect.any(Function),
+    );
+    expect(ctx.squirrelCheckForUpdates).toHaveBeenCalledTimes(1);
+    expect(ctx.quitAndInstall).toHaveBeenCalledWith(false, true);
+  });
+
+  it("calls quitAndInstall directly on non-macOS platforms", () => {
+    installDownloadedUpdateAndQuit("win32");
+
+    expect(isUpdateInstallInProgress()).toBe(true);
+    expect(ctx.appRemoveAllListeners).not.toHaveBeenCalled();
+    expect(ctx.squirrelCheckForUpdates).not.toHaveBeenCalled();
+    expect(ctx.quitAndInstall).toHaveBeenCalledWith(false, true);
+  });
+
+  it("routes updater:install IPC through installDownloadedUpdateAndQuit", async () => {
+    setupAutoUpdater(() => null);
+
+    await invokeIpc("updater:install");
+
+    expect(isUpdateInstallInProgress()).toBe(true);
+    expect(ctx.quitAndInstall).toHaveBeenCalledWith(false, true);
   });
 });
 
