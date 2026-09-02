@@ -1222,6 +1222,10 @@
       "check_section_description": "下载完成后会提示重启。",
       "up_to_date": "已是最新版本。",
       "downloading": "v{{version}} 正在后台下载——准备好安装时会通知你。",
+      "ready_to_install": "v{{version}} 已下载完成，重启后生效。",
+      "restart_now": "立即重启",
+      "restarting": "正在重启…",
+      "restart_failed": "无法重启安装更新，请重试或退出后重新打开 Multica。",
       "check_now": "立即检查",
       "checking": "检查中..."
     },
