@@ -65,6 +65,7 @@ const branchesRef = vi.hoisted(() => ({
 const seenKeys = vi.hoisted(() => ({ current: [] as unknown[][] }));
 const searchRef = vi.hoisted(() => ({ current: new URLSearchParams() }));
 const replace = vi.hoisted(() => vi.fn());
+const push = vi.hoisted(() => vi.fn());
 const refByWsRef = vi.hoisted(() => ({ current: {} as Record<string, string> }));
 const invalidateQueries = vi.hoisted(() => vi.fn());
 
@@ -131,7 +132,7 @@ function renderPage() {
     pathname: "/acme/knowledge",
     searchParams: searchRef.current,
     hash: "",
-    push: vi.fn(),
+    push: push,
     replace,
     back: vi.fn(),
     getShareableUrl: (path) => path,
@@ -151,6 +152,7 @@ function renderPage() {
 describe("KnowledgePage", () => {
   beforeEach(() => {
     replace.mockReset();
+    push.mockReset();
     invalidateQueries.mockReset();
     searchRef.current = new URLSearchParams();
     seenKeys.current = [];
@@ -560,6 +562,50 @@ describe("KnowledgePage", () => {
     expect(screen.getByRole("button", { name: /foo\.md/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^sub$/ })).toBeTruthy();
     expect(screen.queryByText("# Hello KB")).toBeNull();
+  });
+
+  it("pushes history when selecting a file from the tree or directory listing", async () => {
+    const user = userEvent.setup();
+    searchRef.current = new URLSearchParams("path=notes");
+    branchesRef.current = {
+      isFetching: false,
+      isPending: false,
+      isError: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
+    treeRef.current = {
+      isFetching: false,
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [
+          { path: "notes/foo.md", type: "blob" },
+          { path: "README.md", type: "blob" },
+        ],
+      },
+      error: null,
+    };
+    fileRef.current = {
+      isPending: false,
+      isError: true,
+      isFetching: false,
+      data: undefined,
+      error: new ApiError("missing", 404, "Not Found"),
+    };
+    renderPage();
+    await user.click(screen.getByRole("button", { name: /foo\.md/ }));
+    expect(push).toHaveBeenCalledWith(
+      expect.stringContaining("path=notes%2Ffoo.md"),
+    );
+    expect(replace).not.toHaveBeenCalledWith(
+      expect.stringContaining("path=notes%2Ffoo.md"),
+    );
   });
 
   it("invalidates all knowledge queries when Refresh is clicked", async () => {
