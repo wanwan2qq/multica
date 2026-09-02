@@ -57,7 +57,7 @@ export function KnowledgePage() {
   const wsId = useWorkspaceId();
   const p = useWorkspacePaths();
   const queryClient = useQueryClient();
-  const { pathname, searchParams, replace } = useNavigation();
+  const { pathname, searchParams, replace, push } = useNavigation();
   const pathParam = searchParams.get("path") ?? "";
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "multica_knowledge_layout",
@@ -180,7 +180,9 @@ export function KnowledgePage() {
     useKnowledgePathStore.getState().setPath(wsId, next);
     const params = new URLSearchParams(searchParams);
     params.set("path", next);
-    replace(`${pathname}?${params.toString()}`);
+    // Push so linked-doc browsing supports back/forward; branch changes and
+    // bare /knowledge re-entry still use replace below.
+    push(`${pathname}?${params.toString()}`);
   };
 
   // Switching branches can orphan the currently selected path (it might
