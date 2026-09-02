@@ -3,8 +3,8 @@
 #
 # Usage:
 #   export GH_TOKEN=ghp_...   # or GITHUB_TOKEN, needs repo scope
-#   ./scripts/desktop-release-fork.sh --mac --arm64
-#   ./scripts/desktop-release-fork.sh --mac --arm64 --mac --x64
+#   ./scripts/desktop-release-fork.sh --mac --arm64 --publish always
+#   ./scripts/desktop-release-fork.sh --mac --arm64 --mac --x64 --publish always
 #   ./scripts/desktop-release-fork.sh --mac --arm64 --publish never   # local only
 #
 # Requires: pnpm, git, Node 22+, Go (for bundled CLI). Run from repo root.
