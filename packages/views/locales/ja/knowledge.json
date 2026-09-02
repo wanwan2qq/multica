@@ -15,6 +15,8 @@
     "search_placeholder": "ファイルを絞り込み…",
     "search_aria": "ナレッジベースファイルを絞り込み",
     "search_clear": "フィルターをクリア",
+    "hide_dot_prefixed": "ドットファイルを非表示",
+    "hide_dot_prefixed_aria": "名前がドットで始まるファイルとフォルダを非表示",
     "refresh": "更新",
     "refresh_aria": "Git からナレッジを再取得",
     "copy_path": "パスをコピー",
@@ -40,6 +42,7 @@
     "path_not_found_title": "パスが見つかりません",
     "path_not_found_description": "現在のブランチのナレッジベースに、このファイルまたはフォルダはありません。",
     "directory_empty": "このフォルダは空です",
-    "directory_empty_hint": "現在のブランチにはここにファイルがありません。"
+    "directory_empty_hint": "現在のブランチにはここにファイルがありません。",
+    "all_dot_hidden_description": "ドットファイル非表示により、すべてのファイルが隠れています。オフにするとツリー全体を表示します。"
   }
 }
