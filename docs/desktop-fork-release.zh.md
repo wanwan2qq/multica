@@ -154,10 +154,20 @@ CSC_IDENTITY_AUTO_DISCOVERY=false pnpm package -- --mac --arm64 --publish never
 | 检查更新仍指向官方 | 安装包是改 `publish` 之前打的；需重装 fork 包 |
 | 有新版但不提示更新 | 新版本号未大于当前版（semver）；或 Release 缺少 `latest-mac.yml` |
 | kb2 检查更新显示已是最新、但 GitHub 已有 kb4 | electron-updater 把 `-kb2`/`-kb4` 当成不同预发布渠道；发 **桥接包** `v0.4.38-kb2`（同 `-kb2` 后缀、更高 semver、含 updater 修复）可让旧 kb2 自动升级；或手动装带修复的包 |
+| 已下载更新、弹窗反复出现但版本不变 | macOS Squirrel 第二阶段（ShipIt 替换 `/Applications/Multica.app`）未完成；需 **Cmd+Q 完全退出**（不是只关窗口），并安装含 macOS 安装修复的包；仍失败则 **手动装 DMG**（见下方） |
+| 自动更新下载完成但 Restart now 无效 | 同上；未签名（adhoc）包下 ShipIt 成功率更低，**推荐手动 DMG** |
 | `publish` 失败 401 / Bad credentials | 未设置 `GH_TOKEN`；运行 `export GH_TOKEN=$(gh auth token)` 或 `gh auth login`，或直接 `./scripts/desktop-release-fork.sh`（会自动读 gh token） |
 | `publish` 失败 403 | `GH_TOKEN` 无 `repo` 权限，或 token 不属于 `wanwan2qq` |
 | macOS 提示无法验证开发者 | 未签名包；右键打开或 `xattr -cr /Applications/Multica.app` |
 | 客户端访问不了 GitHub | 自动更新失败；可关自动更新，改用手动分发 DMG |
+
+### 手动升级（自动更新失败时）
+
+从 [GitHub Releases](https://github.com/wanwan2qq/multica/releases) 下载对应架构的 `.dmg`，拖入「应用程序」覆盖安装。例如 arm64：
+
+`https://github.com/wanwan2qq/multica/releases/download/v0.4.38-kb2/multica-desktop-0.4.38-kb2-mac-arm64.dmg`
+
+未签名包若被 Gatekeeper 拦截：`xattr -cr /Applications/Multica.app` 或右键 → 打开。
 
 ---
 
