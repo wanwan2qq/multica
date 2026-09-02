@@ -5,7 +5,8 @@
  * each other (e.g. `[PRD](./PRD.md)`, `[SOP](../sop/README.md)`). When
  * rendered in the knowledge page, these links must resolve to `?path=...`
  * URLs so clicking them navigates within the knowledge browser instead of
- * hitting a dead route.
+ * hitting a dead route. Uses the same `kb:` scheme as task `[[path]]` links so
+ * RichContent's `openLink` handles clicks in-app.
  *
  * The transformation is a pure string-to-string markdown preprocessor that
  * runs before the content is handed to RichContent. It does not touch the
@@ -53,15 +54,20 @@ function dirname(filePath: string): string {
   return idx >= 0 ? filePath.slice(0, idx) : "";
 }
 
+/** Same scheme as `preprocessKnowledgeLinks` — consumed by `openLink`. */
+function toKbHref(resolvedPath: string): string {
+  return `kb:${encodeURIComponent(resolvedPath)}`;
+}
+
 /**
  * Rewrite markdown content so that relative links point to knowledge page
- * URLs (`?path=...`).
+ * URLs (`kb:…`).
  *
  * Handles:
- *   - Inline links: `[text](./path/to/file.md)` → `[text](?path=path/to/file.md)`
- *   - Inline links with fragments: `[text](./file.md#heading)` → `[text](?path=file.md)`
- *   - Absolute repo paths: `[text](/path/to/file.md)` → `[text](?path=path/to/file.md)`
- *   - Reference-style definitions: `[ref]: ./path/to/file.md` → `[ref]: ?path=path/to/file.md`
+ *   - Inline links: `[text](./path/to/file.md)` → `[text](kb:path%2Fto%2Ffile.md)`
+ *   - Inline links with fragments: `[text](./file.md#heading)` → `[text](kb:file.md)` (fragment stripped for now)
+ *   - Absolute repo paths: `[text](/path/to/file.md)` → `[text](kb:…)`
+ *   - Reference-style definitions: `[ref]: ./path/to/file.md` → `[ref]: kb:…`
  *
  * Leaves unchanged:
  *   - External URLs (`https://...`)
@@ -82,7 +88,7 @@ export function resolveKnowledgeLinks(
       const url = angleUrl ?? bareUrl;
       if (!isRelativePath(url)) return match;
       const resolved = normalizePath(dir ? `${dir}/${url}` : url);
-      const newUrl = `?path=${encodeURIComponent(resolved)}`;
+      const newUrl = toKbHref(resolved);
       refDefs.set(_id.toLowerCase(), newUrl);
       return `[${_id}]: ${newUrl}`;
     },
@@ -100,7 +106,7 @@ export function resolveKnowledgeLinks(
       const urlWithoutFragment = url.split("#")[0]!;
 
       const resolved = normalizePath(dir ? `${dir}/${urlWithoutFragment}` : urlWithoutFragment);
-      const newUrl = `?path=${encodeURIComponent(resolved)}`;
+      const newUrl = toKbHref(resolved);
       return `[${text}](${newUrl})`;
     },
   );
