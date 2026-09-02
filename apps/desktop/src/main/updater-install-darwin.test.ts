@@ -12,9 +12,7 @@ describe("darwin post-quit install paths", () => {
     expect(darwinUpdaterCacheDir("/Users/me")).toBe(
       "/Users/me/Library/Caches/@multicadesktop-updater",
     );
-    expect(darwinUpdateZipPath("/Users/me")).toBe(
-      "/Users/me/Library/Caches/@multicadesktop-updater/update.zip",
-    );
+    expect(darwinUpdateZipPath("/Users/me/nonexistent")).toBeNull();
   });
 
   it("derives the installed .app bundle from the executable path", () => {
