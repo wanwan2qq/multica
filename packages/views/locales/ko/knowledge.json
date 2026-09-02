@@ -16,7 +16,13 @@
     "search_aria": "지식 베이스 파일 필터링",
     "search_clear": "필터 지우기",
     "refresh": "새로고침",
-    "refresh_aria": "Git에서 지식 베이스 새로고침"
+    "refresh_aria": "Git에서 지식 베이스 새로고침",
+    "copy_path": "경로 복사",
+    "copy_wiki_link": "[[path]]로 복사",
+    "copy_path_aria": "파일 경로 복사",
+    "toast_path_copied": "경로를 복사했습니다",
+    "toast_wiki_link_copied": "참조를 복사했습니다",
+    "directory_item_count_other": "{{count}}개 항목"
   },
   "empty": {
     "not_configured_title": "지식 베이스 저장소가 없습니다",
@@ -30,6 +36,10 @@
     "load_error_title": "지식 베이스를 불러오지 못했습니다",
     "load_error_fallback": "Git 호스트가 트리를 반환하지 않았습니다. URL과 권한을 확인하세요.",
     "no_match": "일치하는 파일이 없습니다",
-    "match_count_other": "{{count}}개 파일 일치"
+    "match_count_other": "{{count}}개 파일 일치",
+    "path_not_found_title": "경로를 찾을 수 없습니다",
+    "path_not_found_description": "현재 브랜치의 지식 베이스에 이 파일이나 폴더가 없습니다.",
+    "directory_empty": "이 폴더는 비어 있습니다",
+    "directory_empty_hint": "현재 브랜치에 여기에 파일이 없습니다."
   }
 }

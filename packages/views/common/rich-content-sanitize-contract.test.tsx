@@ -169,6 +169,14 @@ describe.each(SURFACES)("sanitize contract — $name", ({ render: renderSurface 
 
     expect(container.querySelector(".slash-command")?.textContent).toBe("/deploy");
   });
+
+  it("allows the kb: protocol — a [[wiki]] knowledge reference", () => {
+    const container = renderSurface("[docs/foo.md](kb:docs/foo.md)");
+
+    const href = container.querySelector("a")?.getAttribute("href") ?? "";
+    expect(href).toBe("kb:docs/foo.md");
+    expect(href.toLowerCase()).not.toContain("javascript:");
+  });
 });
 
 // Code-block *rendering* is deliberately not asserted cross-surface yet: chat
