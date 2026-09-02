@@ -51,6 +51,12 @@ export function configureMacX64UpdateChannel(
 // arm64 feed and runtime path remain unchanged.
 configureMacX64UpdateChannel(autoUpdater);
 
+// Fork releases use `-kbN` suffixes (e.g. `0.4.28-kb2`). electron-updater treats
+// semver prerelease identifiers as isolated channels, so a kb2 client only
+// considers kb2-tagged releases "latest" and ignores kb4 — Check now then reports
+// up to date. Follow GitHub `/releases/latest` + numeric semver instead.
+autoUpdater.allowPrerelease = false;
+
 const STARTUP_CHECK_DELAY_MS = 5_000;
 const PERIODIC_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
