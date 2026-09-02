@@ -65,10 +65,10 @@ Tag 须符合：`vX.Y.Z` 或 `vX.Y.Z-suffix`（CI 校验见 `.github/workflows/r
 
 ### 2. 本机打包并发布到 fork Release
 
-需要 [GitHub Personal Access Token](https://github.com/settings/tokens)（`repo` 权限）：
+需要 [GitHub Personal Access Token](https://github.com/settings/tokens)（`repo` 权限），或本机已 `gh auth login`：
 
 ```bash
-export GH_TOKEN=ghp_xxxxxxxx   # 或 GITHUB_TOKEN
+export GH_TOKEN=ghp_xxxxxxxx   # 可选；未设置时脚本会尝试 gh auth token
 
 cd apps/desktop
 CSC_IDENTITY_AUTO_DISCOVERY=false pnpm package -- \
@@ -78,13 +78,13 @@ CSC_IDENTITY_AUTO_DISCOVERY=false pnpm package -- \
 
 未配置 Apple 开发者证书时 `CSC_IDENTITY_AUTO_DISCOVERY=false` 会打**未签名**包，内网分发一般可接受。
 
-也可使用仓库脚本。注意脚本只是把参数原样转发给 `package.mjs`，**不会自动加 `--publish always`**，真正发布必须自己带上：
+也可使用仓库脚本（未 export 时会自动读取 `gh auth login` 的 token）。注意脚本只是把参数原样转发给 `package.mjs`，**不会自动加 `--publish always`**，真正发布必须自己带上：
 
 ```bash
 ./scripts/desktop-release-fork.sh --mac --arm64 --publish always
 ```
 
-（脚本内部已设 `CSC_IDENTITY_AUTO_DISCOVERY=false`，无需重复；开头会校验 `GH_TOKEN`/`GITHUB_TOKEN`。）
+（脚本内部已设 `CSC_IDENTITY_AUTO_DISCOVERY=false`，无需重复。）
 
 ### 3. 验证 Release
 
@@ -152,6 +152,7 @@ CSC_IDENTITY_AUTO_DISCOVERY=false pnpm package -- --mac --arm64 --publish never
 |------|-------------|
 | 检查更新仍指向官方 | 安装包是改 `publish` 之前打的；需重装 fork 包 |
 | 有新版但不提示更新 | 新版本号未大于当前版（semver）；或 Release 缺少 `latest-mac.yml` |
+| `publish` 失败 401 / Bad credentials | 未设置 `GH_TOKEN`；运行 `export GH_TOKEN=$(gh auth token)` 或 `gh auth login`，或直接 `./scripts/desktop-release-fork.sh`（会自动读 gh token） |
 | `publish` 失败 403 | `GH_TOKEN` 无 `repo` 权限，或 token 不属于 `wanwan2qq` |
 | macOS 提示无法验证开发者 | 未签名包；右键打开或 `xattr -cr /Applications/Multica.app` |
 | 客户端访问不了 GitHub | 自动更新失败；可关自动更新，改用手动分发 DMG |
