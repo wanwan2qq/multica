@@ -520,7 +520,10 @@ export const RichContent = memo(function RichContent({
   const processed = useMemo(
     () =>
       highlightToHtml(
-        preprocessMarkdown(content, { cdnDomain, autolinkIssueIdentifiers: true }),
+        preprocessMarkdown(content, {
+          cdnDomain,
+          autolinkIssueIdentifiers: true,
+        }),
       ),
     [content, cdnDomain],
   );

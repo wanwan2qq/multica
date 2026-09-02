@@ -8,6 +8,19 @@ import enKnowledge from "../locales/en/knowledge.json";
 import { useTreeExpandStore } from "@multica/core/knowledge/stores/tree-expand-store";
 import { KnowledgeTree } from "./knowledge-tree";
 
+const copyTextMock = vi.hoisted(() => vi.fn().mockResolvedValue(true));
+const toastSuccessMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@multica/ui/lib/clipboard", () => ({
+  copyText: copyTextMock,
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: toastSuccessMock,
+  },
+}));
+
 const TEST_RESOURCES = {
   en: { knowledge: enKnowledge },
 };
@@ -66,6 +79,9 @@ function renderTree(
 
 describe("KnowledgeTree", () => {
   beforeEach(() => {
+    copyTextMock.mockClear();
+    toastSuccessMock.mockClear();
+    copyTextMock.mockResolvedValue(true);
     // Reset both the in-memory store and the persisted snapshot so the
     // workspace-aware zustand persist doesn't rehydrate a previous test's
     // expansion state when a new tree mounts.
@@ -464,5 +480,27 @@ describe("KnowledgeTree", () => {
     expect(input.className).toContain("border-0");
     expect(input.className).toContain("bg-muted/50");
     expect(input.className).toContain("focus-visible:ring-1");
+  });
+
+  it("copies the repo path from a file context menu", async () => {
+    const user = userEvent.setup();
+    renderTree();
+
+    fireEvent.contextMenu(screen.getByRole("tab", { name: /README\.md/ }));
+    await user.click(screen.getByRole("menuitem", { name: "Copy path" }));
+
+    expect(copyTextMock).toHaveBeenCalledWith("README.md");
+    expect(toastSuccessMock).toHaveBeenCalledWith("Path copied");
+  });
+
+  it("copies a wiki link from a directory context menu", async () => {
+    const user = userEvent.setup();
+    renderTree();
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: /01-贝易转/ }));
+    await user.click(screen.getByRole("menuitem", { name: "Copy as [[path]]" }));
+
+    expect(copyTextMock).toHaveBeenCalledWith("[[01-贝易转]]");
+    expect(toastSuccessMock).toHaveBeenCalledWith("Reference copied");
   });
 });

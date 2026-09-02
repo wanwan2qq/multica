@@ -119,6 +119,18 @@ describe("RichContent link routing", () => {
     );
   });
 
+  it("routes a [[wiki]] knowledge reference to the workspace knowledge page", () => {
+    renderContent(`[[docs/foo.md]]`);
+
+    const link = screen.getByText("docs/foo.md");
+    expect(link.getAttribute("href")).toBe("kb:docs%2Ffoo.md");
+
+    link.click();
+
+    expect(navigatedPaths).toEqual(["/test/knowledge?path=docs%2Ffoo.md"]);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
   it("keeps a same-origin /uploads file external — the backend serves it, not the router", () => {
     const upload = `${APP_ORIGIN}/uploads/2026/07/notes.pdf`;
     renderContent(`[notes.pdf](${upload})`);

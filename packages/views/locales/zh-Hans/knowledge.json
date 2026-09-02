@@ -16,7 +16,13 @@
     "search_aria": "过滤知识库文件",
     "search_clear": "清除过滤",
     "refresh": "刷新",
-    "refresh_aria": "从 Git 刷新知识库"
+    "refresh_aria": "从 Git 刷新知识库",
+    "copy_path": "复制路径",
+    "copy_wiki_link": "复制为 [[path]]",
+    "copy_path_aria": "复制文件路径",
+    "toast_path_copied": "已复制路径",
+    "toast_wiki_link_copied": "已复制引用",
+    "directory_item_count_other": "{{count}} 项"
   },
   "empty": {
     "not_configured_title": "尚未配置知识库仓库",
@@ -30,6 +36,10 @@
     "load_error_title": "无法加载知识库",
     "load_error_fallback": "Git 托管没有返回目录树。请检查仓库地址和访问权限。",
     "no_match": "没有匹配的文件",
-    "match_count_other": "匹配 {{count}} 个文件"
+    "match_count_other": "匹配 {{count}} 个文件",
+    "path_not_found_title": "找不到此路径",
+    "path_not_found_description": "当前分支的知识库中没有这个文件或文件夹。",
+    "directory_empty": "此文件夹为空",
+    "directory_empty_hint": "当前分支下这里没有文件。"
   }
 }

@@ -2,12 +2,14 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
-import { AlertCircle, ChevronRight, ExternalLink, FileQuestion, Library, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronRight, Copy, ExternalLink, FileQuestion, Library, RefreshCw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorCode } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import {
   defaultKnowledgePath,
+  knowledgePathAncestorDirs,
+  resolveKnowledgePath,
   type KnowledgeTreeEntry,
 } from "@multica/core/knowledge";
 import {
@@ -18,8 +20,15 @@ import {
 } from "@multica/core/knowledge/queries";
 import { useRefStore } from "@multica/core/knowledge/stores/ref-store";
 import { useKnowledgePathStore } from "@multica/core/knowledge/stores/knowledge-path-store";
+import { useTreeExpandStore } from "@multica/core/knowledge/stores/tree-expand-store";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { Button } from "@multica/ui/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@multica/ui/components/ui/dropdown-menu";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -31,8 +40,10 @@ import { CollectionPageHeader, CollectionPageState } from "../layout/collection-
 import { RichContent } from "../rich-content";
 import { useT } from "../i18n";
 import { BranchPicker } from "./branch-picker";
+import { KnowledgeDirectoryListing } from "./knowledge-directory-listing";
 import { KnowledgeTree } from "./knowledge-tree";
 import { resolveKnowledgeLinks } from "./resolve-links";
+import { useKnowledgePathCopy } from "./use-knowledge-path-copy";
 
 function blobPaths(entries: KnowledgeTreeEntry[]): string[] {
   return entries.filter((entry) => entry.type === "blob").map((entry) => entry.path);
@@ -59,7 +70,41 @@ export function KnowledgePage() {
   const activeRef = refFromStore || defaultBranch;
 
   const treeQuery = useQuery(knowledgeTreeOptions(wsId, activeRef));
-  const fileQuery = useQuery(knowledgeFileOptions(wsId, activeRef, pathParam));
+
+  // Render-time ref guards: when the user switches branches, `activeRef`
+  // flips and the new query starts, but `treeQuery.data` / `fileQuery.data`
+  // still hold the *previous* ref's response until the new one lands. Treat
+  // mismatched data as "not yet ready" so we render a skeleton instead of
+  // stale content during the transition. (No data + error stays an error.)
+  const treeIsForCurrentRef = treeQuery.data?.ref === activeRef;
+  const hasStaleTreeData = Boolean(treeQuery.data) && !treeIsForCurrentRef;
+  const showTreePending = treeQuery.isPending || hasStaleTreeData;
+  const showTreeError = treeQuery.isError && treeIsForCurrentRef;
+  const showInitialTreeLoad = showTreePending && !treeQuery.data;
+
+  const files = useMemo(
+    () => blobPaths(treeQuery.data?.entries ?? []),
+    [treeQuery.data?.entries],
+  );
+
+  const resolvedPath = useMemo(() => {
+    if (pathParam.length === 0 || !treeIsForCurrentRef || files.length === 0) return null;
+    return resolveKnowledgePath(pathParam, files);
+  }, [pathParam, files, treeIsForCurrentRef]);
+
+  const fileQuery = useQuery(
+    knowledgeFileOptions(wsId, activeRef, pathParam, {
+      enabled: resolvedPath?.kind === "file",
+    }),
+  );
+
+  const fileIsForCurrentRef =
+    resolvedPath?.kind === "file" &&
+    fileQuery.data?.ref === activeRef &&
+    fileQuery.data?.path === pathParam;
+  const hasStaleFileData = Boolean(fileQuery.data) && !fileIsForCurrentRef;
+  const showFilePending = resolvedPath?.kind === "file" && (fileQuery.isPending || hasStaleFileData);
+  const showFileError = resolvedPath?.kind === "file" && fileQuery.isError && fileIsForCurrentRef;
 
   // Manual refresh: Git remotes move under the same branch name, but React
   // Query keeps the last tree/file payload until something invalidates it.
@@ -70,27 +115,6 @@ export function KnowledgePage() {
   const handleRefresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: knowledgeKeys.all(wsId) });
   }, [queryClient, wsId]);
-
-  // Render-time ref guards: when the user switches branches, `activeRef`
-  // flips and the new query starts, but `treeQuery.data` / `fileQuery.data`
-  // still hold the *previous* ref's response until the new one lands. Treat
-  // mismatched data as "not yet ready" so we render a skeleton instead of
-  // stale content during the transition. (No data + error stays an error.)
-  const treeIsForCurrentRef = treeQuery.data?.ref === activeRef;
-  const fileIsForCurrentRef =
-    fileQuery.data?.ref === activeRef && fileQuery.data?.path === pathParam;
-  const hasStaleTreeData = Boolean(treeQuery.data) && !treeIsForCurrentRef;
-  const hasStaleFileData = Boolean(fileQuery.data) && !fileIsForCurrentRef;
-  const showTreePending = treeQuery.isPending || hasStaleTreeData;
-  const showTreeError = treeQuery.isError && treeIsForCurrentRef;
-  const showFilePending = fileQuery.isPending || hasStaleFileData;
-  const showFileError = fileQuery.isError && fileIsForCurrentRef;
-  const showInitialTreeLoad = showTreePending && !treeQuery.data;
-
-  const files = useMemo(
-    () => blobPaths(treeQuery.data?.entries ?? []),
-    [treeQuery.data?.entries],
-  );
 
   // Ephemeral UI state — only this single component sees it. Resetting it
   // across workspace/branch switches is the page's job via `key`, not the
@@ -106,12 +130,28 @@ export function KnowledgePage() {
     // can drop `?path=`. Restore the last file the user opened when it still
     // exists on this ref; otherwise fall back to the default overview.
     const last = useKnowledgePathStore.getState().pathByWs[wsId];
-    const next = last && files.includes(last) ? last : defaultKnowledgePath(files);
+    const lastResolved = last ? resolveKnowledgePath(last, files) : null;
+    const next =
+      lastResolved && lastResolved.kind !== "missing"
+        ? last
+        : defaultKnowledgePath(files);
     if (!next) return;
     const params = new URLSearchParams(searchParams);
     params.set("path", next);
     replace(`${pathname}?${params.toString()}`);
   }, [files, pathParam, pathname, replace, searchParams, treeQuery.isSuccess, treeIsForCurrentRef, wsId]);
+
+  useEffect(() => {
+    if (!resolvedPath || resolvedPath.kind === "missing" || !treeIsForCurrentRef) return;
+    const ancestors = knowledgePathAncestorDirs(resolvedPath.path);
+    if (ancestors.length === 0) return;
+    const store = useTreeExpandStore.getState();
+    const current = store.expandedByWs[wsId] ?? [];
+    const merged = [...new Set([...current, ...ancestors])];
+    if (merged.length !== current.length) {
+      store.expandAll(wsId, merged);
+    }
+  }, [resolvedPath, treeIsForCurrentRef, wsId]);
 
   const selectPath = (next: string) => {
     useKnowledgePathStore.getState().setPath(wsId, next);
@@ -277,6 +317,29 @@ export function KnowledgePage() {
                   title={t(($) => $.empty.no_file_title)}
                   description={t(($) => $.empty.no_file_description)}
                 />
+              ) : !resolvedPath && pathParam.length > 0 ? (
+                <div className="mx-auto w-full max-w-[96ch] px-6 pt-7 sm:px-8 lg:px-10">
+                  <Skeleton className="h-8 w-64" />
+                  <Skeleton className="mt-4 h-48 w-full" />
+                </div>
+              ) : resolvedPath?.kind === "missing" ? (
+                <CollectionPageState
+                  icon={FileQuestion}
+                  title={t(($) => $.empty.path_not_found_title)}
+                  description={t(($) => $.empty.path_not_found_description)}
+                />
+              ) : resolvedPath?.kind === "directory" ? (
+                <>
+                  <KnowledgeBreadcrumb
+                    currentPath={pathParam}
+                    onSelectPath={selectPath}
+                  />
+                  <KnowledgeDirectoryListing
+                    dirPath={resolvedPath.path}
+                    filePaths={files}
+                    onSelect={selectPath}
+                  />
+                </>
               ) : showFilePending ? (
                 <div className="mx-auto w-full max-w-[96ch] px-6 pt-7 sm:px-8 lg:px-10">
                   <Skeleton className="h-8 w-64" />
@@ -325,37 +388,64 @@ function KnowledgeBreadcrumb({
   onSelectPath: (path: string) => void;
 }) {
   const { t } = useT("knowledge");
+  const { copyPath, copyWikiLink } = useKnowledgePathCopy();
   const segments = currentPath.split("/");
 
   return (
     <nav
       aria-label={t(($) => $.page.breadcrumb_aria)}
-      className="flex items-center gap-0.5 border-b border-surface-border px-4 py-2 overflow-x-auto"
+      className="flex items-center gap-2 border-b border-surface-border px-4 py-2"
     >
-      {segments.map((segment, i) => {
-        const isLast = i === segments.length - 1;
-        const path = segments.slice(0, i + 1).join("/");
-        return (
-          <Fragment key={path}>
-            {i > 0 && (
-              <ChevronRight className="h-3 w-3 shrink-0 text-faint-foreground" />
-            )}
-            {isLast ? (
-              <span className="truncate text-caption font-medium text-foreground">
-                {segment}
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onSelectPath(path)}
-                className="truncate text-caption text-muted-foreground hover:text-foreground transition-colors rounded px-1 -mx-1"
-              >
-                {segment}
-              </button>
-            )}
-          </Fragment>
-        );
-      })}
+      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+        {segments.map((segment, i) => {
+          const isLast = i === segments.length - 1;
+          const path = segments.slice(0, i + 1).join("/");
+          return (
+            <Fragment key={path}>
+              {i > 0 && (
+                <ChevronRight className="h-3 w-3 shrink-0 text-faint-foreground" />
+              )}
+              {isLast ? (
+                <span className="truncate text-caption font-medium text-foreground">
+                  {segment}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onSelectPath(path)}
+                  className="truncate text-caption text-muted-foreground hover:text-foreground transition-colors rounded px-1 -mx-1"
+                >
+                  {segment}
+                </button>
+              )}
+            </Fragment>
+          );
+        })}
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 px-2 text-muted-foreground"
+              aria-label={t(($) => $.page.copy_path_aria)}
+              title={t(($) => $.page.copy_path)}
+            >
+              <Copy className="size-3.5" />
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuItem onClick={() => void copyPath(currentPath)}>
+            <Copy className="size-3.5" />
+            {t(($) => $.page.copy_path)}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void copyWikiLink(currentPath)}>
+            {t(($) => $.page.copy_wiki_link)}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </nav>
   );
 }

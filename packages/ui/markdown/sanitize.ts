@@ -24,7 +24,10 @@ export const markdownSanitizeSchema: Options = {
   tagNames: [...(defaultSchema.tagNames ?? []), 'mark'],
   protocols: {
     ...defaultSchema.protocols,
-    href: [...(defaultSchema.protocols?.href ?? []), 'mention', 'slash'],
+    // `kb` is the fork's knowledge-link scheme (`kb:<repo path>`), resolved by
+    // the views layer's openLink into a jump to the workspace knowledge base.
+    // KB-HOOK:
+    href: [...(defaultSchema.protocols?.href ?? []), 'mention', 'slash', 'kb'],
     // Permit inline data-URI images (QR codes, charts, base64 screenshots).
     // The scheme gate only allows `data:` through here; attributes.img below
     // narrows it to image/* so non-image data URIs are still rejected.
@@ -67,6 +70,9 @@ export const markdownSanitizeSchema: Options = {
 export function markdownUrlTransform(url: string): string {
   if (url.startsWith('mention://')) return url
   if (url.startsWith('slash://skill/')) return url
+  // KB-HOOK: fork knowledge-link scheme (`kb:<repo path>`) — pass through so the
+  // views openLink can route it in-app.
+  if (url.startsWith('kb:')) return url
   // defaultUrlTransform strips every data: URL to '', which would blank the src
   // even after rehype-sanitize keeps it. Kept in sync with the image/* narrowing
   // in markdownSanitizeSchema so both gates agree on what a valid inline image is.
