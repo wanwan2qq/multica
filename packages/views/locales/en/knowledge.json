@@ -16,7 +16,14 @@
     "search_aria": "Filter knowledge base files",
     "search_clear": "Clear filter",
     "refresh": "Refresh",
-    "refresh_aria": "Refresh knowledge base from Git"
+    "refresh_aria": "Refresh knowledge base from Git",
+    "copy_path": "Copy path",
+    "copy_wiki_link": "Copy as [[path]]",
+    "copy_path_aria": "Copy file path",
+    "toast_path_copied": "Path copied",
+    "toast_wiki_link_copied": "Reference copied",
+    "directory_item_count_one": "{{count}} item",
+    "directory_item_count_other": "{{count}} items"
   },
   "empty": {
     "not_configured_title": "No knowledge repository",
@@ -31,6 +38,10 @@
     "load_error_fallback": "The Git host didn't return this tree. Check the repository URL and access.",
     "no_match": "No files match this filter.",
     "match_count_one": "{{count}} file matches",
-    "match_count_other": "{{count}} files match"
+    "match_count_other": "{{count}} files match",
+    "path_not_found_title": "Path not found",
+    "path_not_found_description": "This file or folder isn't in the knowledge base on the current branch.",
+    "directory_empty": "This folder is empty.",
+    "directory_empty_hint": "There are no files here on the current branch."
   }
 }

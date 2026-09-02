@@ -134,6 +134,32 @@ describe("openLink", () => {
   });
 });
 
+describe("kb: knowledge links", () => {
+  it("routes a kb: link to the workspace knowledge page at that file", () => {
+    openLink("kb:docs/foo.md", "acme");
+    expect(navigatedPaths()).toEqual(["/acme/knowledge?path=docs%2Ffoo.md"]);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it("decodes an already-percent-encoded kb: destination once", () => {
+    openLink("kb:docs%2Ffoo.md", "acme");
+    expect(navigatedPaths()).toEqual(["/acme/knowledge?path=docs%2Ffoo.md"]);
+  });
+
+  it("strips a leading slash from the kb: destination", () => {
+    openLink("kb:/docs/foo.md", "acme");
+    expect(navigatedPaths()).toEqual(["/acme/knowledge?path=docs%2Ffoo.md"]);
+  });
+
+  it("dispatches the unprefixed knowledge path when no slug is known", () => {
+    // A site-relative `/knowledge?...` path is still in-app; without a current
+    // slug it simply cannot be workspace-scoped, so it navigates as-is.
+    openLink("kb:docs/foo.md");
+    expect(navigatedPaths()).toEqual(["/knowledge?path=docs%2Ffoo.md"]);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe("parseWorkspaceEntityLink", () => {
   const PROJECT_ID = "8f14e45f-ceea-4d0e-a1a2-9b1c0d3e4f5a";
   const ISSUE_ID = "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed";
