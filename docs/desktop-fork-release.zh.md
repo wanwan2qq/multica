@@ -78,11 +78,13 @@ CSC_IDENTITY_AUTO_DISCOVERY=false pnpm package -- \
 
 未配置 Apple 开发者证书时 `CSC_IDENTITY_AUTO_DISCOVERY=false` 会打**未签名**包，内网分发一般可接受。
 
-也可使用仓库脚本（等价于上面命令）：
+也可使用仓库脚本。注意脚本只是把参数原样转发给 `package.mjs`，**不会自动加 `--publish always`**，真正发布必须自己带上：
 
 ```bash
-./scripts/desktop-release-fork.sh --mac --arm64
+./scripts/desktop-release-fork.sh --mac --arm64 --publish always
 ```
+
+（脚本内部已设 `CSC_IDENTITY_AUTO_DISCOVERY=false`，无需重复；开头会校验 `GH_TOKEN`/`GITHUB_TOKEN`。）
 
 ### 3. 验证 Release
 
