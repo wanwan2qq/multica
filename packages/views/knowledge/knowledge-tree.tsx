@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@multica/ui/lib/utils";
 import { Input } from "@multica/ui/components/ui/input";
+import { Switch } from "@multica/ui/components/ui/switch";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -325,6 +326,34 @@ function TreeNodeItem({
 }
 
 // ---------------------------------------------------------------------------
+// Browse preferences
+// ---------------------------------------------------------------------------
+
+export function KnowledgeBrowsePrefs({
+  hideDotPrefixed,
+  onHideDotPrefixedChange,
+}: {
+  hideDotPrefixed: boolean;
+  onHideDotPrefixedChange: (hide: boolean) => void;
+}) {
+  const { t } = useT("knowledge");
+
+  return (
+    <label className="flex items-center justify-between gap-2 px-2.5 py-1">
+      <span className="text-caption text-muted-foreground">
+        {t(($) => $.page.hide_dot_prefixed)}
+      </span>
+      <Switch
+        size="sm"
+        checked={hideDotPrefixed}
+        onCheckedChange={onHideDotPrefixedChange}
+        aria-label={t(($) => $.page.hide_dot_prefixed_aria)}
+      />
+    </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Public component
 // ---------------------------------------------------------------------------
 
@@ -337,6 +366,8 @@ export function KnowledgeTree({
   onSelect,
   filter = "",
   onFilterChange,
+  hideDotPrefixed = false,
+  onHideDotPrefixedChange,
 }: {
   wsId: string;
   filePaths: string[];
@@ -346,6 +377,8 @@ export function KnowledgeTree({
   filter?: string;
   /** Called when the user types or clears the filter input. */
   onFilterChange?: (next: string) => void;
+  hideDotPrefixed?: boolean;
+  onHideDotPrefixedChange?: (hide: boolean) => void;
 }) {
   const { t } = useT("knowledge");
   const normalizedFilter = filter.trim().toLowerCase();
@@ -424,6 +457,12 @@ export function KnowledgeTree({
             ariaLabel={t(($) => $.page.search_aria)}
             clearLabel={t(($) => $.page.search_clear)}
           />
+          {onHideDotPrefixedChange ? (
+            <KnowledgeBrowsePrefs
+              hideDotPrefixed={hideDotPrefixed}
+              onHideDotPrefixedChange={onHideDotPrefixedChange}
+            />
+          ) : null}
           <p className="px-2.5 py-6 text-caption text-muted-foreground">
             {t(($) => $.empty.no_match)}
           </p>
@@ -431,9 +470,17 @@ export function KnowledgeTree({
       );
     }
     return (
-      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-        <FolderOpen className="h-5 w-5 text-faint-foreground" />
-        <p className="mt-2 text-caption">{t(($) => $.empty.no_file_description)}</p>
+      <div className="flex flex-col gap-2">
+        {onHideDotPrefixedChange ? (
+          <KnowledgeBrowsePrefs
+            hideDotPrefixed={hideDotPrefixed}
+            onHideDotPrefixedChange={onHideDotPrefixedChange}
+          />
+        ) : null}
+        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+          <FolderOpen className="h-5 w-5 text-faint-foreground" />
+          <p className="mt-2 text-caption">{t(($) => $.empty.no_file_description)}</p>
+        </div>
       </div>
     );
   }
@@ -469,6 +516,12 @@ export function KnowledgeTree({
         ariaLabel={t(($) => $.page.search_aria)}
         clearLabel={t(($) => $.page.search_clear)}
       />
+      {onHideDotPrefixedChange ? (
+        <KnowledgeBrowsePrefs
+          hideDotPrefixed={hideDotPrefixed}
+          onHideDotPrefixedChange={onHideDotPrefixedChange}
+        />
+      ) : null}
       {normalizedFilter.length > 0 && (
         <p className="px-2.5 pb-1.5 text-caption text-muted-foreground">
           {matchCount === 0
