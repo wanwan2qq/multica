@@ -8,7 +8,9 @@ import { errorCode } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import {
   defaultKnowledgePath,
+  filterBrowsableKnowledgePaths,
   knowledgePathAncestorDirs,
+  pathHasDotPrefixedSegment,
   resolveKnowledgePath,
   type KnowledgeTreeEntry,
 } from "@multica/core/knowledge";
@@ -18,6 +20,7 @@ import {
   knowledgeKeys,
   knowledgeTreeOptions,
 } from "@multica/core/knowledge/queries";
+import { useDisplayPrefsStore } from "@multica/core/knowledge/stores/display-prefs-store";
 import { useRefStore } from "@multica/core/knowledge/stores/ref-store";
 import { useKnowledgePathStore } from "@multica/core/knowledge/stores/knowledge-path-store";
 import { useTreeExpandStore } from "@multica/core/knowledge/stores/tree-expand-store";
@@ -41,7 +44,7 @@ import { RichContent } from "../rich-content";
 import { useT } from "../i18n";
 import { BranchPicker } from "./branch-picker";
 import { KnowledgeDirectoryListing } from "./knowledge-directory-listing";
-import { KnowledgeTree } from "./knowledge-tree";
+import { KnowledgeBrowsePrefs, KnowledgeTree } from "./knowledge-tree";
 import { resolveKnowledgeLinks } from "./resolve-links";
 import { useKnowledgePathCopy } from "./use-knowledge-path-copy";
 
@@ -65,6 +68,10 @@ export function KnowledgePage() {
   // The branch picker always re-keys off this value so the server response
   // can also refresh the picker after the page mounts.
   const refFromStore = useRefStore((s) => s.refByWs[wsId] ?? "");
+  const hideDotPrefixed = useDisplayPrefsStore(
+    (s) => s.hideDotPrefixedByWs[wsId] ?? false,
+  );
+  const setHideDotPrefixed = useDisplayPrefsStore((s) => s.setHideDotPrefixed);
   const branchesQuery = useQuery(knowledgeBranchesOptions(wsId));
   const defaultBranch = branchesQuery.data?.default_branch ?? "";
   const activeRef = refFromStore || defaultBranch;
@@ -82,15 +89,31 @@ export function KnowledgePage() {
   const showTreeError = treeQuery.isError && treeIsForCurrentRef;
   const showInitialTreeLoad = showTreePending && !treeQuery.data;
 
-  const files = useMemo(
+  const allFiles = useMemo(
     () => blobPaths(treeQuery.data?.entries ?? []),
     [treeQuery.data?.entries],
   );
 
+  const visibleFiles = useMemo(
+    () => filterBrowsableKnowledgePaths(allFiles, hideDotPrefixed),
+    [allFiles, hideDotPrefixed],
+  );
+
   const resolvedPath = useMemo(() => {
-    if (pathParam.length === 0 || !treeIsForCurrentRef || files.length === 0) return null;
-    return resolveKnowledgePath(pathParam, files);
-  }, [pathParam, files, treeIsForCurrentRef]);
+    if (pathParam.length === 0 || !treeIsForCurrentRef || allFiles.length === 0) return null;
+    return resolveKnowledgePath(pathParam, allFiles);
+  }, [pathParam, allFiles, treeIsForCurrentRef]);
+
+  const listingFiles = useMemo(() => {
+    if (
+      hideDotPrefixed &&
+      resolvedPath?.kind === "directory" &&
+      pathHasDotPrefixedSegment(resolvedPath.path)
+    ) {
+      return allFiles;
+    }
+    return visibleFiles;
+  }, [allFiles, hideDotPrefixed, resolvedPath, visibleFiles]);
 
   const fileQuery = useQuery(
     knowledgeFileOptions(wsId, activeRef, pathParam, {
@@ -130,16 +153,16 @@ export function KnowledgePage() {
     // can drop `?path=`. Restore the last file the user opened when it still
     // exists on this ref; otherwise fall back to the default overview.
     const last = useKnowledgePathStore.getState().pathByWs[wsId];
-    const lastResolved = last ? resolveKnowledgePath(last, files) : null;
+    const lastResolved = last ? resolveKnowledgePath(last, allFiles) : null;
     const next =
       lastResolved && lastResolved.kind !== "missing"
         ? last
-        : defaultKnowledgePath(files);
+        : defaultKnowledgePath(visibleFiles);
     if (!next) return;
     const params = new URLSearchParams(searchParams);
     params.set("path", next);
     replace(`${pathname}?${params.toString()}`);
-  }, [files, pathParam, pathname, replace, searchParams, treeQuery.isSuccess, treeIsForCurrentRef, wsId]);
+  }, [allFiles, pathParam, pathname, replace, searchParams, treeQuery.isSuccess, treeIsForCurrentRef, visibleFiles, wsId]);
 
   useEffect(() => {
     if (!resolvedPath || resolvedPath.kind === "missing" || !treeIsForCurrentRef) return;
@@ -291,19 +314,29 @@ export function KnowledgePage() {
                   <Skeleton className="h-7 w-4/6" />
                   <Skeleton className="h-7 w-full" />
                 </div>
-              ) : files.length === 0 ? (
-                <p className="px-2.5 py-2 text-caption text-muted-foreground">
-                  {t(($) => $.empty.no_file_description)}
-                </p>
+              ) : visibleFiles.length === 0 ? (
+                <div className="flex flex-col gap-2">
+                  <KnowledgeBrowsePrefs
+                    hideDotPrefixed={hideDotPrefixed}
+                    onHideDotPrefixedChange={(hide) => setHideDotPrefixed(wsId, hide)}
+                  />
+                  <p className="px-2.5 py-2 text-caption text-muted-foreground">
+                    {allFiles.length > 0 && hideDotPrefixed
+                      ? t(($) => $.empty.all_dot_hidden_description)
+                      : t(($) => $.empty.no_file_description)}
+                  </p>
+                </div>
               ) : (
                 <KnowledgeTree
                   key={`${wsId}:${activeRef}`}
                   wsId={wsId}
-                  filePaths={files}
+                  filePaths={visibleFiles}
                   selectedPath={pathParam}
                   onSelect={selectPath}
                   filter={filter}
                   onFilterChange={setFilter}
+                  hideDotPrefixed={hideDotPrefixed}
+                  onHideDotPrefixedChange={(hide) => setHideDotPrefixed(wsId, hide)}
                 />
               )}
             </aside>
@@ -336,7 +369,7 @@ export function KnowledgePage() {
                   />
                   <KnowledgeDirectoryListing
                     dirPath={resolvedPath.path}
-                    filePaths={files}
+                    filePaths={listingFiles}
                     onSelect={selectPath}
                   />
                 </>
