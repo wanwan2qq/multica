@@ -42,6 +42,7 @@ const ctx = vi.hoisted(() => {
     squirrelAutoUpdater,
     appRemoveAllListeners: vi.fn(),
     appExit: vi.fn(),
+    appOn: vi.fn(),
     getAllWindows: vi.fn(
       () =>
         [] as Array<{
@@ -91,6 +92,8 @@ vi.mock("electron", () => ({
     quit: ctx.appQuit,
     removeAllListeners: ctx.appRemoveAllListeners,
     exit: ctx.appExit,
+    on: ctx.appOn,
+    isPackaged: true,
   },
   autoUpdater: ctx.squirrelAutoUpdater,
   BrowserWindow: {

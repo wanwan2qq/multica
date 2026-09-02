@@ -56,7 +56,7 @@ import {
   isAuthStatusError,
   type AuthProbeResult,
 } from "./daemon-auth-probe";
-import { isUpdateInstallInProgress } from "./updater";
+import { isUpdateInstallInProgress, isUpdateReadyToInstall } from "./updater";
 
 const POLL_INTERVAL_MS = 5_000;
 const PREFS_PATH = join(homedir(), ".multica", "desktop_prefs.json");
@@ -1550,7 +1550,12 @@ export function setupDaemonManager(
     // The updater registers first and owns shutdown while its gate is pending.
     // Do not issue a second stop or re-enter app.quit() before PID exit is known.
     // Once the installer owns the quit, leave the daemon to it as well.
-    if (event.defaultPrevented || isQuitting || isUpdateInstallInProgress()) {
+    if (
+      event.defaultPrevented ||
+      isQuitting ||
+      isUpdateInstallInProgress() ||
+      isUpdateReadyToInstall()
+    ) {
       return;
     }
     setDesiredDaemonRunning(false);
