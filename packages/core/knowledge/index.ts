@@ -34,6 +34,10 @@ export {
   pickKnowledgeRepo,
 } from "./pick-repo";
 export {
+  filterBrowsableKnowledgePaths,
+  pathHasDotPrefixedSegment,
+} from "./filter-paths";
+export {
   knowledgePathAncestorDirs,
   listKnowledgeDirectoryChildren,
   normalizeKnowledgePath,
