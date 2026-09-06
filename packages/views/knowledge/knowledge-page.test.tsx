@@ -191,6 +191,7 @@ describe("KnowledgePage", () => {
     treeRef.current = {
       isPending: false,
       isError: true,
+      isFetching: false,
       isSuccess: false,
       data: undefined,
       error: new ApiError("missing", 404, "Not Found", {
@@ -212,11 +213,13 @@ describe("KnowledgePage", () => {
     branchesRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     treeRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       isSuccess: true,
       data: {
         repo_url: "https://github.com/acme/kb.git",
@@ -231,6 +234,7 @@ describe("KnowledgePage", () => {
     fileRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: {
         path: "README.md",
         ref: "main",
@@ -252,11 +256,13 @@ describe("KnowledgePage", () => {
     branchesRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     treeRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       isSuccess: true,
       data: {
         repo_url: "https://github.com/acme/kb.git",
@@ -271,6 +277,7 @@ describe("KnowledgePage", () => {
     fileRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: {
         path: "page.html",
         ref: "main",
@@ -296,6 +303,7 @@ describe("KnowledgePage", () => {
     branchesRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: { branches: ["main", "dev"], default_branch: "main" },
     };
     seenKeys.current = [];
@@ -317,6 +325,7 @@ describe("KnowledgePage", () => {
     treeRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       isSuccess: true,
       data: {
         repo_url: "https://github.com/acme/kb.git",
@@ -340,12 +349,14 @@ describe("KnowledgePage", () => {
     branchesRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     searchRef.current = new URLSearchParams("path=README.md");
     treeRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       isSuccess: true,
       data: {
         repo_url: "https://github.com/acme/kb.git",
@@ -361,6 +372,7 @@ describe("KnowledgePage", () => {
     fileRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: {
         path: "README.md",
         ref: "main",
@@ -385,11 +397,13 @@ describe("KnowledgePage", () => {
     branchesRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     treeRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       isSuccess: true,
       data: {
         repo_url: "https://github.com/acme/kb.git",
@@ -421,11 +435,13 @@ describe("KnowledgePage", () => {
     branchesRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     treeRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       isSuccess: true,
       data: {
         repo_url: "https://github.com/acme/kb.git",
@@ -448,11 +464,13 @@ describe("KnowledgePage", () => {
     branchesRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       data: { branches: ["main"], default_branch: "main" },
     };
     treeRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       isSuccess: true,
       data: {
         repo_url: "https://github.com/acme/kb.git",
@@ -483,6 +501,7 @@ describe("KnowledgePage", () => {
     treeRef.current = {
       isPending: false,
       isError: false,
+      isFetching: false,
       isSuccess: true,
       data: {
         repo_url: "https://github.com/acme/kb.git",
