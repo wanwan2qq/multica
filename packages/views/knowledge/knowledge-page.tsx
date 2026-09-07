@@ -39,6 +39,7 @@ import {
 } from "@multica/ui/components/ui/resizable";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { AppLink, useNavigation } from "../navigation";
+import { useRestoredScrollEntry } from "../platform";
 import { CollectionPageHeader, CollectionPageState } from "../layout/collection-page";
 import { RichContent } from "../rich-content";
 import { useT } from "../i18n";
@@ -143,6 +144,52 @@ export function KnowledgePage() {
   // across workspace/branch switches is the page's job via `key`, not the
   // input's.
   const [filter, setFilter] = useState("");
+
+  // KB-HOOK: restore the reader's scroll position on return. The content pane
+  // scrolls inside its own `overflow-y-auto` section, which the browser's
+  // history restoration never reaches, so the shared MUL-4741 scroll
+  // restoration protocol handles capture: the pane is marked
+  // `data-tab-scroll-root` and both the web capture listener and the desktop
+  // tab coordinator record its offset. The container key carries the document
+  // path because the desktop memento is keyed by pathname only (no `?path=`),
+  // so without it one document's offset would leak onto another.
+  //
+  // Restoration is applied AFTER the document renders, not at ref-attach: the
+  // file loads async, so at attach time the pane still holds a one-screen
+  // skeleton and a saved offset beyond its scrollHeight clamps back to 0. We
+  // wait for `fileContentReady`, then assign the offset into the laid-out
+  // document.
+  const scrollContainerKey = `knowledge-content:${pathParam}`;
+  const contentScrollRef = useRef<HTMLElement | null>(null);
+  const restoredScrollEntry = useRestoredScrollEntry(scrollContainerKey);
+  const fileContentReady =
+    resolvedPath?.kind === "file" &&
+    !showFilePending &&
+    !showFileError &&
+    fileIsForCurrentRef;
+  useEffect(() => {
+    if (!fileContentReady) return;
+    const el = contentScrollRef.current;
+    const top = restoredScrollEntry?.top ?? 0;
+    if (!el || top <= 0) return;
+    // Retry across frames: markdown images/code blocks/Mermaid grow the
+    // document after first paint, so a single assignment can be clamped to a
+    // smaller offset before the content reaches full height. Re-apply each
+    // frame until the offset sticks or we run out of frames (mirrors the
+    // convergence loop issue-detail uses for late-growing content).
+    let rafId = 0;
+    let frames = 0;
+    const apply = () => {
+      el.scrollTop = top;
+      const stuck = Math.abs(el.scrollTop - top) <= 1;
+      if (!stuck && ++frames < 60) {
+        rafId = requestAnimationFrame(apply);
+        return;
+      }
+    };
+    rafId = requestAnimationFrame(apply);
+    return () => cancelAnimationFrame(rafId);
+  }, [fileContentReady, scrollContainerKey, restoredScrollEntry]);
 
   useEffect(() => {
     // Wait for the tree response that actually corresponds to `activeRef`;
@@ -345,7 +392,11 @@ export function KnowledgePage() {
           </ResizablePanel>
           <ResizableHandle />
           <ResizablePanel id="content" minSize="40%">
-            <section className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+            <section
+              ref={contentScrollRef}
+              data-tab-scroll-root={scrollContainerKey}
+              className="h-full min-h-0 min-w-0 overflow-y-auto"
+            >
               {!pathParam ? (
                 <CollectionPageState
                   icon={FileQuestion}
