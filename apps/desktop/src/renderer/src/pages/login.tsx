@@ -1,6 +1,7 @@
 import { LoginPage } from "@multica/views/auth";
 import { DragStrip } from "@multica/views/platform";
 import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
+import { ServerSwitcher } from "../components/server-switcher";
 
 function requireRuntimeAppUrl(): string {
   const runtimeConfig = window.desktopAPI.runtimeConfig;
@@ -22,6 +23,10 @@ export function DesktopLoginPage() {
     );
   };
 
+  // The switcher writes ~/.multica/desktop.json, which only packaged builds
+  // read back — dev derives its endpoints from VITE_* env. Hide it in dev.
+  const serverSwitcher = import.meta.env.DEV ? undefined : <ServerSwitcher />;
+
   return (
     <div className="flex h-screen flex-col">
       <DragStrip />
@@ -32,6 +37,7 @@ export function DesktopLoginPage() {
           // Initial workspace navigation happens in routes.tsx via IndexRedirect.
         }}
         onGoogleLogin={handleGoogleLogin}
+        extra={serverSwitcher}
       />
     </div>
   );

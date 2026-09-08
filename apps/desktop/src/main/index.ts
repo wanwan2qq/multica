@@ -15,6 +15,15 @@ import { installNavigationGuard } from "./navigation-guard";
 import { createRendererWebPreferences } from "./renderer-web-preferences";
 import { getAppVersion } from "./app-version";
 import { loadRuntimeConfig } from "./runtime-config-loader";
+import {
+  desktopConfigPath,
+} from "./runtime-config-loader";
+import {
+  knownServersConfigPath,
+  readKnownServers,
+  removeKnownServer,
+  writeServerConfig,
+} from "./server-config";
 import type { RuntimeConfigResult } from "../shared/runtime-config";
 import {
   RENDERER_ROUTE_CONTEXT_CHANNEL,
@@ -718,6 +727,53 @@ if (!gotTheLock) {
     ipcMain.on("runtime-config:get", (event) => {
       event.returnValue = runtimeConfigResult;
     });
+
+    // Server switcher (fork feature, packaged builds only — dev reads its
+    // config from VITE_* env, so persisting desktop.json would be a no-op).
+    // The renderer pre-login login page lists remembered servers and applies
+    // one by writing desktop.json + the known-servers address book, then
+    // relaunching so the next boot's loadRuntimeConfig picks it up.
+    ipcMain.handle("server-config:list", () => readKnownServers());
+
+    ipcMain.handle(
+      "server-config:remove",
+      (_event, apiUrl: unknown) =>
+        removeKnownServer(typeof apiUrl === "string" ? apiUrl : ""),
+    );
+
+    ipcMain.handle(
+      "server-config:set",
+      async (_event, input: unknown): Promise<{ ok: true }> => {
+        if (is.dev) {
+          // Guard: in dev the active config is env-derived, not file-backed.
+          throw new Error("server-config:set is only available in packaged builds");
+        }
+        const payload = (input ?? {}) as {
+          apiUrl?: unknown;
+          appUrl?: unknown;
+          label?: unknown;
+        };
+        // writeServerConfig validates + normalizes both URLs and throws on
+        // any IO/validation failure — that rejects the invoke promise so the
+        // renderer can surface the error and we do NOT relaunch.
+        await writeServerConfig(
+          {
+            apiUrl: payload.apiUrl as string,
+            appUrl: payload.appUrl as string,
+            label: typeof payload.label === "string" ? payload.label : undefined,
+          },
+          {
+            configPath: desktopConfigPath(),
+            knownPath: knownServersConfigPath(),
+          },
+        );
+        // First app.relaunch() in the codebase (updater only ever calls
+        // app.exit(0)). Relaunch so the fresh process re-reads desktop.json.
+        app.relaunch();
+        app.exit(0);
+        return { ok: true };
+      },
+    );
 
     ipcMain.on(RENDERER_ROUTE_CONTEXT_CHANNEL, (event, context: unknown) => {
       if (!BrowserWindow.fromWebContents(event.sender)) return;

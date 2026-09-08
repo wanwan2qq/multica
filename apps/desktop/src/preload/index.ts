@@ -149,6 +149,16 @@ const desktopAPI = {
     subscribeToMainRendererChannel("invite:open", callback),
   /** Open a URL in the default browser */
   openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", url),
+  /** Server switcher (packaged builds): list the remembered server address book. */
+  listKnownServers: () => ipcRenderer.invoke("server-config:list"),
+  /** Server switcher (packaged builds): persist a new active server to
+   *  desktop.json + the address book, then relaunch. Rejects on validation or
+   *  IO failure (no relaunch in that case). */
+  setServer: (input: { apiUrl: string; appUrl: string; label?: string }) =>
+    ipcRenderer.invoke("server-config:set", input),
+  /** Server switcher: remove one remembered server from the address book. */
+  removeKnownServer: (apiUrl: string) =>
+    ipcRenderer.invoke("server-config:remove", apiUrl),
   /** Download a file by URL through Electron's native download system.
    *  Shows a save dialog and saves to disk. Unlike openExternal, this
    *  avoids browser rendering of HTML files on Linux.
