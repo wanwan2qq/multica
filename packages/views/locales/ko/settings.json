@@ -973,6 +973,19 @@
       "reconnect_failed": "데몬에 다시 연결하지 못했습니다",
       "try_again_moment": "잠시 후 다시 시도하세요.",
       "try_again": "다시 시도하세요."
+    },
+    "server_switcher": {
+      "title": "서버",
+      "current": "서버: {{host}}",
+      "add_new": "서버 추가",
+      "api_url": "API 주소",
+      "web_url": "Web 주소",
+      "label_optional": "이름(선택 사항)",
+      "save_restart": "저장 후 재시작",
+      "switching": "재시작 중…",
+      "remove": "삭제",
+      "cancel": "취소",
+      "error_invalid": "해당 주소를 사용할 수 없습니다. 두 URL을 확인한 후 다시 시도하세요."
     }
   },
   "members": {

@@ -1,5 +1,6 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
 import type { RuntimeConfigResult } from "../shared/runtime-config";
+import type { KnownServer } from "../shared/server-config";
 import type { NavigationGesture } from "../shared/navigation-gestures";
 import type { RendererRouteContextInput } from "../shared/renderer-route-context";
 import type { FreezeBreadcrumb } from "../shared/freeze-breadcrumb";
@@ -47,6 +48,17 @@ interface DesktopAPI {
   onInviteOpen: (callback: (invitationId: string) => void) => () => void;
   /** Open a URL in the default browser. */
   openExternal: (url: string) => Promise<void>;
+  /** Server switcher (packaged builds): the remembered server address book. */
+  listKnownServers: () => Promise<KnownServer[]>;
+  /** Server switcher (packaged builds): persist a new active server and
+   *  relaunch. Rejects on validation or IO failure (no relaunch then). */
+  setServer: (input: {
+    apiUrl: string;
+    appUrl: string;
+    label?: string;
+  }) => Promise<void>;
+  /** Server switcher: remove one remembered server from the address book. */
+  removeKnownServer: (apiUrl: string) => Promise<KnownServer[]>;
   /** Download a file by URL through Electron's native download system.
    *  Shows a native save dialog. On non-desktop platforms this is undefined. */
   downloadURL: (url: string) => Promise<void>;

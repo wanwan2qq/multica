@@ -1242,6 +1242,19 @@
       "reconnect_failed": "Couldn't reconnect the daemon",
       "try_again_moment": "Please try again in a moment.",
       "try_again": "Please try again."
+    },
+    "server_switcher": {
+      "title": "Server",
+      "current": "Server: {{host}}",
+      "add_new": "Add a server",
+      "api_url": "API address",
+      "web_url": "Web address",
+      "label_optional": "Name (optional)",
+      "save_restart": "Save and restart",
+      "switching": "Restarting…",
+      "remove": "Remove",
+      "cancel": "Cancel",
+      "error_invalid": "Couldn't use that address. Check both URLs and try again."
     }
   },
   "members": {

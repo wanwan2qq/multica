@@ -1235,6 +1235,19 @@
       "reconnect_failed": "デーモンに再接続できませんでした",
       "try_again_moment": "しばらくしてからもう一度お試しください。",
       "try_again": "もう一度お試しください。"
+    },
+    "server_switcher": {
+      "title": "サーバー",
+      "current": "サーバー: {{host}}",
+      "add_new": "サーバーを追加",
+      "api_url": "API アドレス",
+      "web_url": "Web アドレス",
+      "label_optional": "名前（任意）",
+      "save_restart": "保存して再起動",
+      "switching": "再起動中…",
+      "remove": "削除",
+      "cancel": "キャンセル",
+      "error_invalid": "そのアドレスは使用できません。両方の URL を確認してもう一度お試しください。"
     }
   },
   "members": {
