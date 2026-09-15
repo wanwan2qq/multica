@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
-import { AlertCircle, ChevronRight, Copy, ExternalLink, FileQuestion, Library, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronRight, Copy, Download, ExternalLink, FileQuestion, Library, RefreshCw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorCode } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
@@ -47,6 +47,7 @@ import { BranchPicker } from "./branch-picker";
 import { KnowledgeDirectoryListing } from "./knowledge-directory-listing";
 import { KnowledgeBrowsePrefs, KnowledgeTree } from "./knowledge-tree";
 import { resolveKnowledgeLinks } from "./resolve-links";
+import { useKnowledgeFileDownload } from "./use-knowledge-file-download";
 import { useKnowledgePathCopy } from "./use-knowledge-path-copy";
 
 function blobPaths(entries: KnowledgeTreeEntry[]): string[] {
@@ -144,6 +145,8 @@ export function KnowledgePage() {
   // across workspace/branch switches is the page's job via `key`, not the
   // input's.
   const [filter, setFilter] = useState("");
+
+  const { download, busy: downloadingFile } = useKnowledgeFileDownload(wsId);
 
   // KB-HOOK: restore the reader's scroll position on return. The content pane
   // scrolls inside its own `overflow-y-auto` section, which the browser's
@@ -445,9 +448,14 @@ export function KnowledgePage() {
                 />
               ) : (
                 <>
+                  {/* `activeRef` is what the file query was keyed on, and this
+                      branch only renders once that response has landed — so it
+                      names the revision actually on screen. */}
                   <KnowledgeBreadcrumb
                     currentPath={pathParam}
                     onSelectPath={selectPath}
+                    onDownload={() => void download(pathParam, activeRef)}
+                    downloading={downloadingFile}
                   />
                   <KnowledgeFileBody
                     currentPath={pathParam}
@@ -469,9 +477,15 @@ export function KnowledgePage() {
 function KnowledgeBreadcrumb({
   currentPath,
   onSelectPath,
+  onDownload,
+  downloading = false,
 }: {
   currentPath: string;
   onSelectPath: (path: string) => void;
+  // Omitted when the selection is a directory: folders are Git's to archive,
+  // not this page's, and the preview endpoint has no folder payload to save.
+  onDownload?: () => void;
+  downloading?: boolean;
 }) {
   const { t } = useT("knowledge");
   const { copyPath, copyWikiLink } = useKnowledgePathCopy();
@@ -508,6 +522,19 @@ function KnowledgeBreadcrumb({
           );
         })}
       </div>
+      {onDownload ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 shrink-0 px-2 text-muted-foreground"
+          aria-label={t(($) => $.page.download_aria)}
+          title={t(($) => $.page.download)}
+          onClick={onDownload}
+          disabled={downloading}
+        >
+          <Download className={downloading ? "size-3.5 animate-pulse" : "size-3.5"} />
+        </Button>
+      ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger
           render={

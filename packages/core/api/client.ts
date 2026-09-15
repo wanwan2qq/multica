@@ -2612,6 +2612,21 @@ export class ApiClient {
     });
   }
 
+  // The knowledge preview and download endpoints answer differently on
+  // purpose: the preview caps the body and reports binary media as
+  // unrenderable, while this one returns the whole blob under an attachment
+  // disposition. Returns the raw Blob — there is no JSON schema to parse, and
+  // the caller owns turning it into a file.
+  async downloadKnowledgeFile(workspaceId: string, path: string, ref?: string): Promise<Blob> {
+    const search = new URLSearchParams({ path });
+    const trimmedRef = ref?.trim();
+    if (trimmedRef) search.set("ref", trimmedRef);
+    const res = await this.fetchRaw(
+      `/api/workspaces/${workspaceId}/knowledge/download?${search.toString()}`,
+    );
+    return res.blob();
+  }
+
   async getKnowledgeBranches(workspaceId: string): Promise<KnowledgeBranchesResponse> {
     const raw = await this.fetch<unknown>(`/api/workspaces/${workspaceId}/knowledge/branches`);
     return parseWithFallback(raw, KnowledgeBranchesResponseSchema, EMPTY_KNOWLEDGE_BRANCHES, {
