@@ -15,6 +15,11 @@ import (
 
 var knowledgeHTTPClient = &http.Client{Timeout: 20 * time.Second}
 
+// Downloads move a whole blob rather than a preview-sized slice, so they get a
+// budget a large file on a slow link can still finish inside. The preview
+// client's 20s is tuned for the 256 KiB reads it actually performs.
+var knowledgeDownloadHTTPClient = &http.Client{Timeout: 5 * time.Minute}
+
 var errKnowledgeFileNotFound = errors.New("knowledge file not found")
 
 type gitRemote struct {
@@ -314,46 +319,85 @@ func fetchKnowledgeBranchesHTTP(ctx context.Context, remote gitRemote) ([]string
 	return names, def, nil
 }
 
-func fetchKnowledgeFileHTTP(ctx context.Context, remote gitRemote, ref, filePath string) ([]byte, bool, error) {
-	var apiURL string
+// knowledgeFileEndpoint returns the provider-specific raw-file URL and the
+// Accept header that asks for bytes rather than a base64 JSON envelope.
+func knowledgeFileEndpoint(remote gitRemote, ref, filePath string) (string, string) {
 	encodedPath := escapeRepoPath(filePath)
-	accept := ""
 	switch remote.Provider {
 	case "github":
-		apiURL = fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s?ref=%s",
-			url.PathEscape(remote.Owner), url.PathEscape(remote.Repo), encodedPath, url.QueryEscape(ref))
-		accept = "application/vnd.github.raw"
+		return fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s?ref=%s",
+				url.PathEscape(remote.Owner), url.PathEscape(remote.Repo), encodedPath, url.QueryEscape(ref)),
+			"application/vnd.github.raw"
 	case "gitlab":
-		apiURL = fmt.Sprintf("https://%s/api/v4/projects/%s/repository/files/%s/raw?ref=%s",
-			remote.Host, url.PathEscape(remote.projectPath()), url.PathEscape(filePath), url.QueryEscape(ref))
+		return fmt.Sprintf("https://%s/api/v4/projects/%s/repository/files/%s/raw?ref=%s",
+			remote.Host, url.PathEscape(remote.projectPath()), url.PathEscape(filePath), url.QueryEscape(ref)), ""
 	default:
-		apiURL = fmt.Sprintf("https://%s/api/v1/repos/%s/%s/raw/%s?ref=%s",
-			remote.Host, url.PathEscape(remote.Owner), url.PathEscape(remote.Repo), encodedPath, url.QueryEscape(ref))
+		return fmt.Sprintf("https://%s/api/v1/repos/%s/%s/raw/%s?ref=%s",
+			remote.Host, url.PathEscape(remote.Owner), url.PathEscape(remote.Repo), encodedPath, url.QueryEscape(ref)), ""
 	}
-	resp, err := knowledgeGET(ctx, apiURL, remote.Provider, accept)
+}
+
+// openKnowledgeFile issues the raw-file request and normalizes the statuses
+// both readers care about. The caller owns the returned body.
+func openKnowledgeFile(ctx context.Context, client *http.Client, remote gitRemote, ref, filePath string) (*http.Response, error) {
+	apiURL, accept := knowledgeFileEndpoint(remote, ref, filePath)
+	resp, err := knowledgeGETWith(ctx, client, apiURL, remote.Provider, accept)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		resp.Body.Close()
+		return nil, errKnowledgeFileNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("failed to read %s (HTTP %d)", filePath, resp.StatusCode)
+	}
+	return resp, nil
+}
+
+// fetchKnowledgeFileHTTP reads the preview-sized slice of a file. Anything past
+// the cap is dropped and reported, because the preview cannot show it anyway.
+func fetchKnowledgeFileHTTP(ctx context.Context, remote gitRemote, ref, filePath string) ([]byte, bool, error) {
+	resp, err := openKnowledgeFile(ctx, knowledgeHTTPClient, remote, ref, filePath)
 	if err != nil {
 		return nil, false, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, false, errKnowledgeFileNotFound
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("failed to read %s (HTTP %d)", filePath, resp.StatusCode)
-	}
-	limited := io.LimitReader(resp.Body, knowledgeMaxFileBytes+1)
-	body, err := io.ReadAll(limited)
+	return readKnowledgeBody(resp.Body, knowledgeMaxFileBytes)
+}
+
+// fetchKnowledgeFileDownloadHTTP reads a whole file for download. It shares the
+// preview's cap shape only so an oversized blob is reported instead of silently
+// truncated — the caller turns that into an error, never into a short file.
+func fetchKnowledgeFileDownloadHTTP(ctx context.Context, remote gitRemote, ref, filePath string) ([]byte, bool, error) {
+	resp, err := openKnowledgeFile(ctx, knowledgeDownloadHTTPClient, remote, ref, filePath)
 	if err != nil {
 		return nil, false, err
 	}
-	truncated := len(body) > knowledgeMaxFileBytes
-	if truncated {
-		body = body[:knowledgeMaxFileBytes]
+	defer resp.Body.Close()
+	return readKnowledgeBody(resp.Body, knowledgeMaxDownloadBytes)
+}
+
+// readKnowledgeBody reads at most limit bytes and reports whether the source
+// held more. The extra byte read is what tells "exactly limit" — a complete
+// file — apart from "over limit", which is not.
+func readKnowledgeBody(r io.Reader, limit int64) ([]byte, bool, error) {
+	body, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, false, err
 	}
-	return body, truncated, nil
+	if int64(len(body)) > limit {
+		return body[:limit], true, nil
+	}
+	return body, false, nil
 }
 
 func knowledgeGET(ctx context.Context, apiURL, provider, accept string) (*http.Response, error) {
+	return knowledgeGETWith(ctx, knowledgeHTTPClient, apiURL, provider, accept)
+}
+
+func knowledgeGETWith(ctx context.Context, client *http.Client, apiURL, provider, accept string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, err
@@ -371,5 +415,5 @@ func knowledgeGET(ctx context.Context, apiURL, provider, accept string) (*http.R
 			req.Header.Set("Authorization", "token "+token)
 		}
 	}
-	return knowledgeHTTPClient.Do(req)
+	return client.Do(req)
 }
