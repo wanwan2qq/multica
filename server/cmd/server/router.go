@@ -1605,6 +1605,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					// KB-HOOK: workspace knowledge base read API.
 					r.Get("/knowledge/tree", h.GetKnowledgeTree)
 					r.Get("/knowledge/file", h.GetKnowledgeFile)
+					r.Get("/knowledge/download", h.GetKnowledgeDownload)
 					r.Get("/knowledge/branches", h.GetKnowledgeBranches)
 				})
 				// Admin-level access

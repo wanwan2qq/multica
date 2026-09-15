@@ -4,8 +4,11 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/multica-ai/multica/server/internal/testutil"
 )
 
 func TestPickKnowledgeRepo(t *testing.T) {
@@ -336,6 +339,155 @@ func TestFetchKnowledgeFileWithRefOverride(t *testing.T) {
 	}
 	if string(body) != "# dev branch" {
 		t.Fatalf("file body=%q", body)
+	}
+}
+
+// stubKnowledgeClients points both knowledge HTTP clients at one fake Git host
+// for the duration of a test. The preview and download paths use different
+// clients (different timeouts), so a test that exercises either has to swap the
+// one it drives — and swapping both keeps a test from silently measuring the
+// real network when it drives the other.
+func stubKnowledgeClients(t *testing.T, fake *http.Client) {
+	t.Helper()
+	prevPreview, prevDownload := knowledgeHTTPClient, knowledgeDownloadHTTPClient
+	t.Cleanup(func() {
+		knowledgeHTTPClient = prevPreview
+		knowledgeDownloadHTTPClient = prevDownload
+	})
+	knowledgeHTTPClient, knowledgeDownloadHTTPClient = fake, fake
+}
+
+// The preview stops at knowledgeMaxFileBytes and reports it; a download that
+// stopped there would hand the user a file that ends mid-document with nothing
+// saying so. This is the boundary between the two.
+func TestFetchKnowledgeFileDownloadHTTPIgnoresPreviewCap(t *testing.T) {
+	body := strings.Repeat("x", knowledgeMaxFileBytes+512)
+	stubKnowledgeClients(t, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if !strings.Contains(req.URL.Path, "/contents/") {
+			return jsonResponse(http.StatusNotFound, `{"message":"nope"}`), nil
+		}
+		return textResponse(http.StatusOK, body), nil
+	})})
+
+	remote := gitRemote{Host: "github.com", Owner: "acme", Repo: "kb", Provider: "github"}
+
+	preview, truncated, err := fetchKnowledgeFileHTTP(context.Background(), remote, "main", "big.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !truncated || len(preview) != knowledgeMaxFileBytes {
+		t.Fatalf("preview: truncated=%v len=%d, want truncated at %d", truncated, len(preview), knowledgeMaxFileBytes)
+	}
+
+	full, oversized, err := fetchKnowledgeFileDownloadHTTP(context.Background(), remote, "main", "big.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oversized {
+		t.Fatalf("download: reported oversized for a %d byte body under the %d byte limit", len(body), knowledgeMaxDownloadBytes)
+	}
+	if string(full) != body {
+		t.Fatalf("download: body len=%d, want %d", len(full), len(body))
+	}
+}
+
+// readKnowledgeBody's extra byte is the whole reason an exactly-at-limit file
+// is not reported as oversized. Both sides of that edge are asserted because
+// each has its own failure: off-by-one either truncates a complete file or
+// ships a partial one.
+func TestReadKnowledgeBodyReportsOverflowPastLimit(t *testing.T) {
+	over, oversized, err := readKnowledgeBody(strings.NewReader("hello"), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !oversized || string(over) != "hell" {
+		t.Fatalf("over limit: oversized=%v body=%q, want oversized with %q", oversized, over, "hell")
+	}
+
+	exact, oversized, err := readKnowledgeBody(strings.NewReader("hello"), 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oversized || string(exact) != "hello" {
+		t.Fatalf("exactly at limit: oversized=%v body=%q, want complete body", oversized, exact)
+	}
+}
+
+// knowledgeDownloadContentType. An extension MIME lookup is environment
+// dependent (Go consults the platform's mime.types), so only the fallback is
+// pinned — that is the branch this function owns.
+func TestKnowledgeDownloadContentTypeFallsBackToOctetStream(t *testing.T) {
+	if got := knowledgeDownloadContentType("docs/no-extension-here"); got != "application/octet-stream" {
+		t.Fatalf("extensionless path: got %q, want application/octet-stream", got)
+	}
+}
+
+// The download endpoint is the only way to get a binary or oversized file out
+// of the knowledge base intact, so its contract runs against a real workspace
+// row with a tagged knowledge repo — the same shape loadKnowledgeRepo resolves.
+func TestGetKnowledgeDownloadServesWholeFileAsAttachment(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("requires DB")
+	}
+
+	body := strings.Repeat("贝", 300)
+	stubKnowledgeClients(t, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if !strings.HasSuffix(req.URL.Path, "/contents/docs/guide.md") {
+			return jsonResponse(http.StatusNotFound, `{"message":"nope"}`), nil
+		}
+		return textResponse(http.StatusOK, body), nil
+	})})
+
+	workspaceID := dbfx.Workspace(t,
+		"Knowledge download "+t.Name(),
+		"kb-download-"+strings.ToLower(strings.ReplaceAll(t.Name(), "_", "-")),
+		testutil.Cols{
+			"repos": testutil.Raw(`'[{"url":"https://github.com/acme/kb.git","description":"知识库"}]'::jsonb`),
+		},
+	)
+
+	req := newRequest("GET", "/api/workspaces/"+workspaceID+"/knowledge/download?path=docs/guide.md&ref=main", nil)
+	req = withURLParam(req, "id", workspaceID)
+	resp := testutil.Call(t, testHandler.GetKnowledgeDownload, req).Want(http.StatusOK)
+
+	disposition := resp.Header().Get("Content-Disposition")
+	if !strings.HasPrefix(disposition, "attachment;") || !strings.Contains(disposition, "guide.md") {
+		t.Fatalf("Content-Disposition = %q, want an attachment carrying guide.md", disposition)
+	}
+	if got := resp.Body.String(); got != body {
+		t.Fatalf("body len=%d, want the whole %d byte file", len(got), len(body))
+	}
+}
+
+// The path guard is shared with the preview endpoint, but the download endpoint
+// is the one that would hand raw bytes to a traversal, so it is asserted here
+// rather than assumed from the preview's coverage.
+func TestGetKnowledgeDownloadRejectsUnsafePaths(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("requires DB")
+	}
+
+	workspaceID := dbfx.Workspace(t,
+		"Knowledge download guard "+t.Name(),
+		"kb-download-guard-"+strings.ToLower(strings.ReplaceAll(t.Name(), "_", "-")),
+		testutil.Cols{
+			"repos": testutil.Raw(`'[{"url":"https://github.com/acme/kb.git","description":"知识库"}]'::jsonb`),
+		},
+	)
+
+	for _, tc := range []struct {
+		name  string
+		query string
+	}{
+		{name: "missing path", query: "?ref=main"},
+		{name: "parent traversal", query: "?path=" + url.QueryEscape("../../etc/passwd") + "&ref=main"},
+		{name: "absolute path", query: "?path=" + url.QueryEscape("/etc/passwd") + "&ref=main"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := newRequest("GET", "/api/workspaces/"+workspaceID+"/knowledge/download"+tc.query, nil)
+			req = withURLParam(req, "id", workspaceID)
+			testutil.Call(t, testHandler.GetKnowledgeDownload, req).Want(http.StatusBadRequest)
+		})
 	}
 }
 
