@@ -69,6 +69,14 @@ const push = vi.hoisted(() => vi.fn());
 const refByWsRef = vi.hoisted(() => ({ current: {} as Record<string, string> }));
 const invalidateQueries = vi.hoisted(() => vi.fn());
 
+const downloadKnowledgeFile = vi.hoisted(() => vi.fn());
+vi.mock("@multica/core/api", async (importOriginal) => ({
+  // ApiError stays real: the tests below build a knowledge_repo_not_configured
+  // instance from it, and only the network surface is replaced.
+  ...(await importOriginal<typeof import("@multica/core/api")>()),
+  api: { downloadKnowledgeFile },
+}));
+
 vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-1" }));
 vi.mock("@multica/core/paths", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@multica/core/paths")>()),
@@ -154,6 +162,7 @@ describe("KnowledgePage", () => {
     replace.mockReset();
     push.mockReset();
     invalidateQueries.mockReset();
+    downloadKnowledgeFile.mockReset();
     searchRef.current = new URLSearchParams();
     seenKeys.current = [];
     refByWsRef.current = {};
@@ -185,6 +194,140 @@ describe("KnowledgePage", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  // A rendered markdown file plus the tree entry that resolves it, so a test
+  // can get to the breadcrumb without restating the whole fixture.
+  function openMarkdownFile(filePath = "README.md") {
+    searchRef.current = new URLSearchParams(`path=${filePath}`);
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [{ path: filePath, type: "blob" }],
+      },
+      error: null,
+    };
+    fileRef.current = {
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      data: {
+        path: filePath,
+        ref: "main",
+        browse_url: `https://github.com/acme/kb/blob/main/${filePath}`,
+        media: "markdown",
+        truncated: false,
+        size: 8,
+        content: "# Hello KB",
+      },
+      error: null,
+    };
+  }
+
+  it("downloads the open document through the authenticated API client", async () => {
+    // jsdom has neither object URLs nor a download pipeline, so both halves of
+    // the save are stubbed and asserted: the bytes are fetched with the
+    // workspace/path/ref the page is showing, and the anchor names the file.
+    const createObjectURL = vi.fn(() => "blob:knowledge");
+    const revokeObjectURL = vi.fn();
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+    const clicked: HTMLAnchorElement[] = [];
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        clicked.push(this);
+      });
+    downloadKnowledgeFile.mockResolvedValue(new Blob(["# Hello KB"]));
+
+    try {
+      openMarkdownFile("guides/start.md");
+      renderPage();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Download this file" }),
+      );
+
+      expect(downloadKnowledgeFile).toHaveBeenCalledWith(
+        "ws-1",
+        "guides/start.md",
+        "main",
+      );
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      // The last click is the download's; Breadcrumb segments are <button>s and
+      // the copy menu is not opened here.
+      expect(clicked.at(-1)?.download).toBe("start.md");
+      expect(clicked.at(-1)?.getAttribute("href")).toBe("blob:knowledge");
+    } finally {
+      click.mockRestore();
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+    }
+  });
+
+  it("reports a failed download instead of saving an error body", async () => {
+    const createObjectURL = vi.fn(() => "blob:knowledge");
+    const originalCreate = URL.createObjectURL;
+    URL.createObjectURL = createObjectURL;
+    downloadKnowledgeFile.mockRejectedValue(new Error("boom"));
+
+    try {
+      openMarkdownFile();
+      renderPage();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Download this file" }),
+      );
+
+      expect(downloadKnowledgeFile).toHaveBeenCalledTimes(1);
+      expect(createObjectURL).not.toHaveBeenCalled();
+    } finally {
+      URL.createObjectURL = originalCreate;
+    }
+  });
+
+  it("offers no download while a directory is selected", () => {
+    searchRef.current = new URLSearchParams("path=guides");
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      data: {
+        repo_url: "https://github.com/acme/kb.git",
+        description: "知识库",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [{ path: "guides/start.md", type: "blob" }],
+      },
+      error: null,
+    };
+    renderPage();
+
+    expect(
+      screen.queryByRole("button", { name: "Download this file" }),
+    ).toBeNull();
   });
 
   it("asks the user to label a repo when none is configured", () => {

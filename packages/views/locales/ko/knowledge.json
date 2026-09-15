@@ -22,6 +22,9 @@
     "copy_path": "경로 복사",
     "copy_wiki_link": "[[path]]로 복사",
     "copy_path_aria": "파일 경로 복사",
+    "download": "다운로드",
+    "download_aria": "이 파일 다운로드",
+    "download_failed": "파일을 다운로드하지 못했습니다",
     "toast_path_copied": "경로를 복사했습니다",
     "toast_wiki_link_copied": "참조를 복사했습니다",
     "directory_item_count_other": "{{count}}개 항목"

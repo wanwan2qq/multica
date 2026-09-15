@@ -22,6 +22,9 @@
     "copy_path": "パスをコピー",
     "copy_wiki_link": "[[path]] としてコピー",
     "copy_path_aria": "ファイルパスをコピー",
+    "download": "ダウンロード",
+    "download_aria": "このファイルをダウンロード",
+    "download_failed": "ダウンロードに失敗しました",
     "toast_path_copied": "パスをコピーしました",
     "toast_wiki_link_copied": "参照をコピーしました",
     "directory_item_count_other": "{{count}} 件"
