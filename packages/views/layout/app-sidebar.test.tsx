@@ -424,7 +424,7 @@ describe("personal nav — Chat", () => {
   });
 
   it("renders the inbox unread count as a red pill badge", () => {
-    inboxItems.current = [{ id: "inbox-1", read: false }];
+    summary.current = [{ workspace_id: "ws-1", count: 1 }];
     const { container } = render(<AppSidebar />);
     const flow = container.querySelector<HTMLElement>(
       'button[data-href="/acme/inbox"] number-flow-react',
