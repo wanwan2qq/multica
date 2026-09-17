@@ -64,6 +64,7 @@ grep -E '^(PORT|BACKEND_PORT|FRONTEND_PORT|FRONTEND_ORIGIN|MULTICA_APP_URL|CORS_
 - `--china`：构建时用 `goproxy.cn` + `npmmirror`
 - `--lan`：把 compose 端口从 `127.0.0.1` 改成 `0.0.0.0`，否则**只有服务器本机能访问**，办公网桌面客户端会一直「正在重新连接」
 - 每次解压都会把上游的 `docker-compose.selfhost.yml` 盖回来（又是 `127.0.0.1`），所以 **每次重建都要带 `--lan`**（若仍直连 IP:端口）
+- `--sharp-wasm`（或 `.env` / 环境变量 `SHARP_WASM=1`）：旧 KVM / 无 SSE4.2 的 CPU 上，新版 `sharp` 预编译包要求 x86-64-v2，会导致 `next build` 处理 PNG 失败；打开后改用 WASM sharp。**默认关闭**，现代 CPU / CI 不必开
 
 若基础镜像拉不下，先修 Docker registry mirrors 或手动：
 
@@ -184,6 +185,7 @@ ssh worker@<server> 'cd /home/worker/multica && ./scripts/selfhost-rebuild.sh --
 | 服务器 `curl 127.0.0.1:8082` 通，客户端「正在重新连接」 | 端口仍绑在 `127.0.0.1` → 加 `--lan` 重建 |
 | 本机 curl IP 得到 `Empty reply` | 同上，或中间设备干扰；先看 `ss -lntp` 是否为 `*:8082` |
 | `curl` connection refused | backend 未就绪或端口与 `.env` / desktop.json 不一致 |
+| `sharp` / `Unsupported CPU` / `require v2 microarchitecture` | 客户机缺 SSE4.2（常见于 `Common KVM processor`）。重建加 `--sharp-wasm`，或 `.env` 写 `SHARP_WASM=1`；有宿主机权限时可把 CPU 改成 `host` 后不必开 |
 
 ---
 
