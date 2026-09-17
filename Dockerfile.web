@@ -60,28 +60,48 @@ ENV NEXT_PUBLIC_APP_VERSION=$NEXT_PUBLIC_APP_VERSION
 ENV STANDALONE=true
 
 # Optional: old KVM/x86-64-v1 hosts cannot load modern sharp linux x64
-# prebuilds (need SSE4.2 / microarchitecture v2). Installing @img/sharp-wasm32
-# alone is not enough — sharp still prefers linuxmusl-x64 and throws before any
-# wasm fallback. Pin an older sharp that still ships v1-compatible prebuilds.
-# Install scripts must download libvips from GitHub by default; many CN / air-
-# gapped hosts time out, so point at npmmirror binaries when this path is on.
+# prebuilds (need SSE4.2 / microarchitecture v2). next@16 pulls sharp@0.35.x
+# as its own dependency — adding sharp@0.32.6 only at the workspace root is
+# not enough; next build still resolves 0.35 and fails. Force a pnpm override
+# so every consumer (including next) gets 0.32.6, install via npmmirror
+# (GitHub Releases often time out on CN hosts), then verify.
 # Default stays off so normal CI / modern hosts keep current sharp.
 # Opt in: build-arg SHARP_WASM=1, env SHARP_WASM=1, or --sharp-wasm.
 ARG SHARP_WASM=0
 RUN if [ "$SHARP_WASM" = "1" ]; then \
-      echo "==> SHARP_WASM=1: pinning sharp@0.32.6 for x86-64-v1 CPUs"; \
+      set -eu; \
+      echo "==> SHARP_WASM=1: override all sharp → 0.32.6 for x86-64-v1 CPUs"; \
       export npm_config_sharp_libvips_binary_host="https://cdn.npmmirror.com/binaries/sharp-libvips"; \
       export npm_config_sharp_binary_host="https://cdn.npmmirror.com/binaries/sharp"; \
       export SHARP_DIST_BASE_URL="https://cdn.npmmirror.com/binaries/sharp-libvips/v8.14.5/"; \
-      pnpm add -w sharp@0.32.6; \
-      # Ensure install scripts ran (pnpm onlyBuiltDependencies must include sharp).
+      node <<'NODE'
+const fs = require("fs");
+const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+pkg.pnpm = pkg.pnpm || {};
+pkg.pnpm.overrides = { ...(pkg.pnpm.overrides || {}), sharp: "0.32.6" };
+const only = new Set(pkg.pnpm.onlyBuiltDependencies || []);
+only.add("sharp");
+pkg.pnpm.onlyBuiltDependencies = [...only];
+fs.writeFileSync("package.json", `${JSON.stringify(pkg, null, 2)}\n`);
+NODE
+      pnpm install --no-frozen-lockfile; \
       SHARP_ROOT="$(node -p "require('path').dirname(require.resolve('sharp/package.json'))")"; \
       (cd "$SHARP_ROOT" && \
         npm_config_sharp_libvips_binary_host="$npm_config_sharp_libvips_binary_host" \
         npm_config_sharp_binary_host="$npm_config_sharp_binary_host" \
         SHARP_DIST_BASE_URL="$SHARP_DIST_BASE_URL" \
         npm run install); \
-      node -e "require('sharp'); console.log('sharp ok', require('sharp').versions)"; \
+      node -e "\
+        const v=require('sharp/package.json').version;\
+        if (v !== '0.32.6') throw new Error('expected sharp@0.32.6 everywhere, got '+v+' at '+require.resolve('sharp'));\
+        require('sharp');\
+        console.log('sharp ok', v, require('sharp').versions);\
+      "; \
+      if ls -d node_modules/.pnpm/sharp@0.35* >/dev/null 2>&1; then \
+        echo "error: sharp@0.35 still present under .pnpm; override did not stick" >&2; \
+        ls -d node_modules/.pnpm/sharp@* >&2; \
+        exit 1; \
+      fi; \
     fi
 
 # Build the web app (standalone output for minimal runtime)

@@ -186,7 +186,7 @@ ssh worker@<server> 'cd /home/worker/multica && ./scripts/selfhost-rebuild.sh --
 | 本机 curl IP 得到 `Empty reply` | 同上，或中间设备干扰；先看 `ss -lntp` 是否为 `*:8082` |
 | `curl` connection refused | backend 未就绪或端口与 `.env` / desktop.json 不一致 |
 | `sharp` / `Unsupported CPU` / `require v2 microarchitecture` | 客户机缺 SSE4.2（常见于 `Common KVM processor`）。重建加 `--sharp-wasm`，或 `.env` 写 `SHARP_WASM=1`（固定 `sharp@0.32.6` + npmmirror 拉 libvips）；有宿主机权限时可把 CPU 改成 `host` 后不必开 |
-| `sharp` / `Downloading github.com/lovell/sharp-libvips` / `Request timed out` | 服务器访问不了 GitHub Releases。确保用含 npmmirror libvips 地址的补丁包，并带 `SHARP_WASM=1` 重建 |
+| `sharp` / `Unsupported CPU` 且路径里是 `sharp@0.35.x` | Next 仍在用自带的新 sharp。需含 **pnpm overrides 强制 0.32.6** 的补丁包（勿只用根依赖 `pnpm add sharp@0.32.6`） |
 
 ---
 
