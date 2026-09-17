@@ -25,5 +25,6 @@ services:
         COREPACK_NPM_REGISTRY: ${COREPACK_NPM_REGISTRY:-https://registry.npmjs.org}
         npm_config_registry: ${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}
         # Set SHARP_WASM=1 on x86-64-v1 / old KVM CPUs that fail next build with
-        # "Prebuilt binaries for Linux x64 require v2 microarchitecture".
+        # "Prebuilt binaries for Linux x64 require v2 microarchitecture"
+        # (pins sharp@0.32.6; flag name kept for existing .env files).
         SHARP_WASM: ${SHARP_WASM:-0}

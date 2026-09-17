@@ -7,7 +7,7 @@
 #   ./scripts/selfhost-rebuild.sh --china --lan   # also bind 0.0.0.0 for LAN/desktop clients
 #   ./scripts/selfhost-rebuild.sh --china --lan --no-cache
 #   ./scripts/selfhost-rebuild.sh --china --lan --sharp-wasm
-#       # old KVM/x86-64-v1 CPUs: use wasm sharp so next build can process PNGs
+#       # old KVM/x86-64-v1 CPUs: pin sharp@0.32.6 so next build can process PNGs
 #   SHARP_WASM=1 ./scripts/selfhost-rebuild.sh --china --lan   # same via env / .env
 
 set -euo pipefail
@@ -83,7 +83,7 @@ export SHARP_WASM="${SHARP_WASM:-0}"
 
 echo "==> VERSION=$VERSION COMMIT=$COMMIT"
 if [[ "$SHARP_WASM" == "1" ]]; then
-  echo "==> SHARP_WASM=1 (wasm sharp for x86-64-v1 / old KVM CPUs)"
+  echo "==> SHARP_WASM=1 (sharp@0.32.6 for x86-64-v1 / old KVM CPUs)"
 fi
 echo "==> building backend + frontend from local source"
 

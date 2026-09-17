@@ -59,24 +59,17 @@ ARG NEXT_PUBLIC_APP_VERSION=dev
 ENV NEXT_PUBLIC_APP_VERSION=$NEXT_PUBLIC_APP_VERSION
 ENV STANDALONE=true
 
-# Optional: old KVM/x86-64-v1 hosts cannot load sharp's linux x64 prebuilds
-# (need SSE4.2 / microarchitecture v2). sharp does not fall back to wasm when
-# the native package is present — it throws "Unsupported CPU" first. So we
-# remove linux* prebuilds and install wasm32 only. Default stays off so normal
-# CI / modern hosts keep native sharp. Opt in with:
-#   docker compose ... build --build-arg SHARP_WASM=1
-#   or ./scripts/selfhost-rebuild.sh --sharp-wasm
+# Optional: old KVM/x86-64-v1 hosts cannot load modern sharp linux x64
+# prebuilds (need SSE4.2 / microarchitecture v2). Installing @img/sharp-wasm32
+# alone is not enough — sharp still prefers linuxmusl-x64 and throws before any
+# wasm fallback. Pin an older sharp that still ships v1-compatible prebuilds.
+# Default stays off so normal CI / modern hosts keep current sharp.
+# Opt in: build-arg SHARP_WASM=1, env SHARP_WASM=1, or --sharp-wasm.
 ARG SHARP_WASM=0
 RUN if [ "$SHARP_WASM" = "1" ]; then \
-      echo "==> SHARP_WASM=1: forcing wasm32 sharp for x86-64-v1 CPUs"; \
-      find node_modules -type d \( \
-        -name 'sharp-linuxmusl-x64' -o \
-        -name 'sharp-linux-x64' -o \
-        -name '@img+sharp-linuxmusl-x64*' -o \
-        -name '@img+sharp-linux-x64*' \
-      \) -prune -exec rm -rf {} + 2>/dev/null || true; \
-      pnpm add -w --config.cpu=wasm32 sharp @img/sharp-wasm32; \
-      node -e "require('sharp'); console.log('sharp wasm ok', require('sharp').versions)"; \
+      echo "==> SHARP_WASM=1: pinning sharp@0.32.6 for x86-64-v1 CPUs"; \
+      pnpm add -w sharp@0.32.6; \
+      node -e "require('sharp'); console.log('sharp ok', require('sharp').versions)"; \
     fi
 
 # Build the web app (standalone output for minimal runtime)
