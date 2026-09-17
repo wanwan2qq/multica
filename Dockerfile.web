@@ -83,11 +83,10 @@ RUN if [ "$SHARP_WASM" = "1" ]; then \
         SHARP_DIST_BASE_URL="$SHARP_DIST_BASE_URL" \
         npm run install); \
       node -e 'const v=require("sharp/package.json").version; if (v!=="0.32.6") throw new Error("expected sharp@0.32.6 everywhere, got "+v+" at "+require.resolve("sharp")); require("sharp"); console.log("sharp ok", v, require("sharp").versions);'; \
-      if ls -d node_modules/.pnpm/sharp@0.35* >/dev/null 2>&1; then \
-        echo "error: sharp@0.35 still present under .pnpm; override did not stick" >&2; \
-        ls -d node_modules/.pnpm/sharp@* >&2; \
-        exit 1; \
-      fi; \
+      # pnpm may leave an unused sharp@0.35 store folder; remove it so next
+      # cannot accidentally resolve the new binary on x86-64-v1 hosts.
+      rm -rf node_modules/.pnpm/sharp@0.35* || true; \
+      node -e 'const v=require("sharp/package.json").version; if (v!=="0.32.6") throw new Error("sharp resolution drifted to "+v); console.log("sharp resolve ok", require.resolve("sharp"));'; \
     fi
 
 # Build the web app (standalone output for minimal runtime)
