@@ -37,7 +37,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "electron"
+      "electron",
+      "sharp"
     ],
     "overrides": {
       "@types/react": "catalog:",
