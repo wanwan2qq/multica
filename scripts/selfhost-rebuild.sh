@@ -6,6 +6,9 @@
 #   ./scripts/selfhost-rebuild.sh --china         # goproxy.cn + npmmirror (recommended in CN)
 #   ./scripts/selfhost-rebuild.sh --china --lan   # also bind 0.0.0.0 for LAN/desktop clients
 #   ./scripts/selfhost-rebuild.sh --china --lan --no-cache
+#   ./scripts/selfhost-rebuild.sh --china --lan --sharp-wasm
+#       # old KVM/x86-64-v1 CPUs: use wasm sharp so next build can process PNGs
+#   SHARP_WASM=1 ./scripts/selfhost-rebuild.sh --china --lan   # same via env / .env
 
 set -euo pipefail
 
@@ -20,8 +23,9 @@ for arg in "$@"; do
     --china) china=1 ;;
     --lan) lan=1 ;;
     --no-cache) no_cache=1 ;;
+    --sharp-wasm) export SHARP_WASM=1 ;;
     -h|--help)
-      sed -n '2,14p' "$0"
+      sed -n '2,16p' "$0"
       exit 0
       ;;
     *)
@@ -74,8 +78,13 @@ fi
 export VERSION="${VERSION:-$(git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo dev)}"
 export COMMIT="${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)}"
 export DATE="${DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+# Compose reads SHARP_WASM for Dockerfile.web; default off (native sharp).
+export SHARP_WASM="${SHARP_WASM:-0}"
 
 echo "==> VERSION=$VERSION COMMIT=$COMMIT"
+if [[ "$SHARP_WASM" == "1" ]]; then
+  echo "==> SHARP_WASM=1 (wasm sharp for x86-64-v1 / old KVM CPUs)"
+fi
 echo "==> building backend + frontend from local source"
 
 build_args=(build)
