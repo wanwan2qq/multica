@@ -69,6 +69,9 @@ ARG SHARP_WASM=0
 RUN if [ "$SHARP_WASM" = "1" ]; then \
       echo "==> SHARP_WASM=1: pinning sharp@0.32.6 for x86-64-v1 CPUs"; \
       pnpm add -w sharp@0.32.6; \
+      # Ensure install scripts ran (pnpm onlyBuiltDependencies must include sharp).
+      SHARP_ROOT="$(node -p "require('path').dirname(require.resolve('sharp/package.json'))")"; \
+      (cd "$SHARP_ROOT" && npm run install); \
       node -e "require('sharp'); console.log('sharp ok', require('sharp').versions)"; \
     fi
 
