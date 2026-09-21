@@ -14,6 +14,7 @@ import {
 import { listKnowledgeDirectoryChildren } from "@multica/core/knowledge";
 import { cn } from "@multica/ui/lib/utils";
 import { useT } from "../i18n";
+import { readingWidthClass } from "./reading-width";
 
 type FileIconKind = "markdown" | "html" | "code" | "config" | "image" | "style" | "generic";
 
@@ -74,10 +75,13 @@ export function KnowledgeDirectoryListing({
   dirPath,
   filePaths,
   onSelect,
+  fullscreen = false,
 }: {
   dirPath: string;
   filePaths: string[];
   onSelect: (path: string) => void;
+  /** Widen for the full-screen reader (see `readingWidthClass`). */
+  fullscreen?: boolean;
 }) {
   const { t } = useT("knowledge");
   const { directories, files } = listKnowledgeDirectoryChildren(dirPath, filePaths);
@@ -85,7 +89,7 @@ export function KnowledgeDirectoryListing({
   const folderName = displayName(dirPath);
 
   return (
-    <div className="mx-auto w-full max-w-[96ch] px-6 pb-24 pt-7 sm:px-8 lg:px-10">
+    <div className={cn(readingWidthClass(fullscreen), "px-6 pb-24 pt-7 sm:px-8 lg:px-10")}>
       <div className="mb-6 flex items-start gap-3">
         <Folder className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
         <div className="min-w-0">

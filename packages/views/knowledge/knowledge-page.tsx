@@ -1,11 +1,15 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDefaultLayout } from "react-resizable-panels";
-import { AlertCircle, ChevronRight, Copy, Download, ExternalLink, FileQuestion, Library, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronRight, Copy, Download, ExternalLink, FileQuestion, Library, Maximize2, Minimize2, RefreshCw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorCode } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
+import {
+  isEditableShortcutTarget,
+  isPortalLayerShortcutTarget,
+} from "@multica/core/shortcuts";
 import {
   defaultKnowledgePath,
   filterBrowsableKnowledgePaths,
@@ -38,14 +42,18 @@ import {
   ResizablePanelGroup,
 } from "@multica/ui/components/ui/resizable";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
+import { useSidebarSafe } from "@multica/ui/components/ui/sidebar";
+import { cn } from "@multica/ui/lib/utils";
 import { AppLink, useNavigation } from "../navigation";
 import { useRestoredScrollEntry } from "../platform";
 import { CollectionPageHeader, CollectionPageState } from "../layout/collection-page";
+import { shouldIgnoreGlobalShortcutEvent } from "../layout/global-shortcuts";
 import { RichContent } from "../rich-content";
 import { useT } from "../i18n";
 import { BranchPicker } from "./branch-picker";
 import { KnowledgeDirectoryListing } from "./knowledge-directory-listing";
 import { KnowledgeBrowsePrefs, KnowledgeTree } from "./knowledge-tree";
+import { readingWidthClass } from "./reading-width";
 import { resolveKnowledgeLinks } from "./resolve-links";
 import { useKnowledgeFileDownload } from "./use-knowledge-file-download";
 import { useKnowledgePathCopy } from "./use-knowledge-path-copy";
@@ -64,6 +72,53 @@ export function KnowledgePage() {
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "multica_knowledge_layout",
   });
+
+  // Full-screen reading mode: the document takes the whole window — the KB
+  // tree and the shell's nav column both go away. Page-level view state, so
+  // it is deliberately not persisted: a reader who leaves the tab comes back
+  // to the page as every other route shows it.
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // The nav column belongs to the shell, and a page cannot hide a sibling.
+  // Ask through the sidebar context instead of reaching into the shell.
+  // `useSidebarSafe` returns null when there is no shell around the page — a
+  // standalone render — which leaves the toggle a change to the reader alone.
+  const sidebar = useSidebarSafe();
+  // `setOpen`'s identity changes with `open` (see SidebarProvider), so the
+  // effect below reads the context through a ref rather than resubscribing on
+  // every nav toggle — the same reason the provider's own auto-collapse does.
+  const sidebarRef = useRef(sidebar);
+  useEffect(() => {
+    sidebarRef.current = sidebar;
+  });
+  useEffect(() => {
+    if (!fullscreen) return;
+    // Park the nav state the reader came in with and close the column. On
+    // exit — or unmount, which is a tab switch or a route change — put back
+    // exactly what was there, so full screen never costs the user their nav.
+    const { open, setOpen } = sidebarRef.current ?? {};
+    setOpen?.(false);
+    return () => {
+      if (open) setOpen?.(true);
+    };
+  }, [fullscreen]);
+
+  // Escape is the way out, unless something above the page owns the key: an
+  // open menu or dialog, an editable target, or a handler that already
+  // consumed it. Composed from the shell's own guards so that the popup closes
+  // first and the reader does not swallow the second Escape as well.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (shouldIgnoreGlobalShortcutEvent(event)) return;
+      if (isEditableShortcutTarget(event.target)) return;
+      if (isPortalLayerShortcutTarget(event.target)) return;
+      setFullscreen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [fullscreen]);
 
   // Branch selection: persisted per-workspace in localStorage; empty means
   // "fall back to whatever the server's default-branch endpoint returns".
@@ -194,6 +249,24 @@ export function KnowledgePage() {
     return () => cancelAnimationFrame(rafId);
   }, [fileContentReady, scrollContainerKey, restoredScrollEntry]);
 
+  // Toggling full screen swaps the reader between the panel group and a bare
+  // section, so the scroll container is a new element and would start at the
+  // top — losing the reader's place in the middle of a long document. Carry
+  // the offset across in a layout effect, which lands before paint: the
+  // document never visibly jumps.
+  const pendingScrollTopRef = useRef<number | null>(null);
+  const toggleFullscreen = useCallback(() => {
+    pendingScrollTopRef.current = contentScrollRef.current?.scrollTop ?? null;
+    setFullscreen((value) => !value);
+  }, []);
+  useLayoutEffect(() => {
+    const pending = pendingScrollTopRef.current;
+    if (pending === null) return;
+    pendingScrollTopRef.current = null;
+    const el = contentScrollRef.current;
+    if (el && pending > 0) el.scrollTop = pending;
+  }, [fullscreen]);
+
   useEffect(() => {
     // Wait for the tree response that actually corresponds to `activeRef`;
     // otherwise an in-flight refetch for the *previous* ref could land us
@@ -260,6 +333,99 @@ export function KnowledgePage() {
       ""
     : (treeIsForCurrentRef && treeQuery.data?.browse_url) || "";
 
+  // The file bar is the reader's chrome — the path, and the file's own
+  // actions — so it sits above the scroll container rather than inside it: a
+  // long document scrolls under the bar instead of carrying it away. Keeping
+  // it out also means the reader below it is sized by layout instead of by
+  // measurement, which matters for the HTML frame: the bar only appears once
+  // the file resolves, so a height measured before that would be stale by
+  // exactly the bar's height the moment it shows up.
+  const fileIsReady =
+    Boolean(pathParam) &&
+    resolvedPath?.kind === "file" &&
+    !showFilePending &&
+    !showFileError;
+  const fileBar =
+    pathParam && (resolvedPath?.kind === "directory" || fileIsReady) ? (
+      <KnowledgeBreadcrumb
+        currentPath={pathParam}
+        onSelectPath={selectPath}
+        // Omitted for a directory: folders are Git's to archive, not this
+        // page's, and the preview endpoint has no folder payload to save.
+        onDownload={fileIsReady ? () => void download(pathParam, activeRef) : undefined}
+        downloading={fileIsReady && downloadingFile}
+      />
+    ) : null;
+
+  // The reader in both modes: full screen swaps the tree out around it, but
+  // the scroller — and therefore the element the scroll offset is restored
+  // into — is the same.
+  const contentSection = (
+    <div className="flex h-full min-h-0 flex-col">
+      {fileBar}
+      <section
+        ref={contentScrollRef}
+        data-tab-scroll-root={scrollContainerKey}
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto"
+      >
+        {!pathParam ? (
+          <CollectionPageState
+            icon={FileQuestion}
+            title={t(($) => $.empty.no_file_title)}
+            description={t(($) => $.empty.no_file_description)}
+          />
+        ) : !resolvedPath && pathParam.length > 0 ? (
+          <div className={cn(readingWidthClass(fullscreen), "px-6 pt-7 sm:px-8 lg:px-10")}>
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="mt-4 h-48 w-full" />
+          </div>
+        ) : resolvedPath?.kind === "missing" ? (
+          <CollectionPageState
+            icon={FileQuestion}
+            title={t(($) => $.empty.path_not_found_title)}
+            description={t(($) => $.empty.path_not_found_description)}
+          />
+        ) : resolvedPath?.kind === "directory" ? (
+          <KnowledgeDirectoryListing
+            dirPath={resolvedPath.path}
+            filePaths={listingFiles}
+            onSelect={selectPath}
+            fullscreen={fullscreen}
+          />
+        ) : showFilePending ? (
+          <div className={cn(readingWidthClass(fullscreen), "px-6 pt-7 sm:px-8 lg:px-10")}>
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="mt-4 h-48 w-full" />
+          </div>
+        ) : showFileError ? (
+          <CollectionPageState
+            role="alert"
+            tone="destructive"
+            icon={AlertCircle}
+            title={t(($) => $.empty.load_error_title)}
+            description={
+              fileQuery.error instanceof Error
+                ? fileQuery.error.message
+                : t(($) => $.empty.load_error_fallback)
+            }
+          />
+        ) : (
+          // `activeRef` is what the file query was keyed on, and this branch
+          // only renders once that response has landed — so it names the
+          // revision actually on screen.
+          <KnowledgeFileBody
+            currentPath={pathParam}
+            media={fileQuery.data?.media ?? "text"}
+            content={fileQuery.data?.content ?? ""}
+            truncated={fileQuery.data?.truncated === true}
+            browseURL={fileQuery.data?.browse_url ?? browseURL}
+            fullscreen={fullscreen}
+          />
+        )}
+      </section>
+    </div>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <CollectionPageHeader
@@ -268,6 +434,24 @@ export function KnowledgePage() {
         description={activeRef || undefined}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={t(($) =>
+                fullscreen ? $.page.fullscreen_exit : $.page.fullscreen_enter,
+              )}
+              title={t(($) =>
+                fullscreen ? $.page.fullscreen_exit : $.page.fullscreen_enter,
+              )}
+              aria-pressed={fullscreen}
+              onClick={toggleFullscreen}
+            >
+              {fullscreen ? (
+                <Minimize2 className="size-3.5" />
+              ) : (
+                <Maximize2 className="size-3.5" />
+              )}
+            </Button>
             <BranchPicker
               wsId={wsId}
               value={refFromStore}
@@ -341,6 +525,12 @@ export function KnowledgePage() {
               : t(($) => $.empty.load_error_fallback)
           }
         />
+      ) : fullscreen ? (
+        // Full-screen reading: the tree is unmounted rather than collapsed so
+        // no drag handle is left behind for a document that has nothing to
+        // resize against. `toggleFullscreen` carries the scroll offset across
+        // the remount of the scroll container.
+        contentSection
       ) : (
         <ResizablePanelGroup
           orientation="horizontal"
@@ -395,78 +585,7 @@ export function KnowledgePage() {
           </ResizablePanel>
           <ResizableHandle />
           <ResizablePanel id="content" minSize="40%">
-            <section
-              ref={contentScrollRef}
-              data-tab-scroll-root={scrollContainerKey}
-              className="h-full min-h-0 min-w-0 overflow-y-auto"
-            >
-              {!pathParam ? (
-                <CollectionPageState
-                  icon={FileQuestion}
-                  title={t(($) => $.empty.no_file_title)}
-                  description={t(($) => $.empty.no_file_description)}
-                />
-              ) : !resolvedPath && pathParam.length > 0 ? (
-                <div className="mx-auto w-full max-w-[96ch] px-6 pt-7 sm:px-8 lg:px-10">
-                  <Skeleton className="h-8 w-64" />
-                  <Skeleton className="mt-4 h-48 w-full" />
-                </div>
-              ) : resolvedPath?.kind === "missing" ? (
-                <CollectionPageState
-                  icon={FileQuestion}
-                  title={t(($) => $.empty.path_not_found_title)}
-                  description={t(($) => $.empty.path_not_found_description)}
-                />
-              ) : resolvedPath?.kind === "directory" ? (
-                <>
-                  <KnowledgeBreadcrumb
-                    currentPath={pathParam}
-                    onSelectPath={selectPath}
-                  />
-                  <KnowledgeDirectoryListing
-                    dirPath={resolvedPath.path}
-                    filePaths={listingFiles}
-                    onSelect={selectPath}
-                  />
-                </>
-              ) : showFilePending ? (
-                <div className="mx-auto w-full max-w-[96ch] px-6 pt-7 sm:px-8 lg:px-10">
-                  <Skeleton className="h-8 w-64" />
-                  <Skeleton className="mt-4 h-48 w-full" />
-                </div>
-              ) : showFileError ? (
-                <CollectionPageState
-                  role="alert"
-                  tone="destructive"
-                  icon={AlertCircle}
-                  title={t(($) => $.empty.load_error_title)}
-                  description={
-                    fileQuery.error instanceof Error
-                      ? fileQuery.error.message
-                      : t(($) => $.empty.load_error_fallback)
-                  }
-                />
-              ) : (
-                <>
-                  {/* `activeRef` is what the file query was keyed on, and this
-                      branch only renders once that response has landed — so it
-                      names the revision actually on screen. */}
-                  <KnowledgeBreadcrumb
-                    currentPath={pathParam}
-                    onSelectPath={selectPath}
-                    onDownload={() => void download(pathParam, activeRef)}
-                    downloading={downloadingFile}
-                  />
-                  <KnowledgeFileBody
-                    currentPath={pathParam}
-                    media={fileQuery.data?.media ?? "text"}
-                    content={fileQuery.data?.content ?? ""}
-                    truncated={fileQuery.data?.truncated === true}
-                    browseURL={fileQuery.data?.browse_url ?? browseURL}
-                  />
-                </>
-              )}
-            </section>
+            {contentSection}
           </ResizablePanel>
         </ResizablePanelGroup>
       )}
@@ -494,7 +613,7 @@ function KnowledgeBreadcrumb({
   return (
     <nav
       aria-label={t(($) => $.page.breadcrumb_aria)}
-      className="flex items-center gap-2 border-b border-surface-border px-4 py-2"
+      className="flex shrink-0 items-center gap-2 border-b border-surface-border px-4 py-2"
     >
       <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
         {segments.map((segment, i) => {
@@ -564,37 +683,22 @@ function KnowledgeBreadcrumb({
 }
 
 function HtmlPreview({ content, title }: { content: string; title: string }) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(720);
-
-  // Expand the iframe to the document height so the full page renders in the
-  // parent scroll area instead of a cramped inner viewport.
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-
-    const syncHeight = () => {
-      const doc = iframe.contentDocument;
-      if (!doc) return;
-      const next = Math.max(
-        doc.documentElement?.scrollHeight ?? 0,
-        doc.body?.scrollHeight ?? 0,
-        480,
-      );
-      setHeight(next);
-    };
-
-    iframe.addEventListener("load", syncHeight);
-    return () => iframe.removeEventListener("load", syncHeight);
-  }, [content]);
-
+  // An HTML document gets the reader's pane as its window, the way a browser
+  // tab does — nothing about it is measured from the document's own content.
+  // These documents are written against the viewport: `height: 100vh` slide
+  // decks, `position: fixed` chrome, images sized in `vh`. Sized to its
+  // content instead, the page is laid out against a viewport it cannot see —
+  // a deck puts its pager wherever the measurement landed, and everything the
+  // document paints stops short of the pane, leaving a band of background
+  // below it. Layout does the sizing: the frame is the scroller's only child,
+  // below the file bar, so it stays right through a full-screen toggle, a
+  // dragged divider, and the window itself. A document taller than the pane
+  // scrolls inside the frame, as it would in a tab.
   return (
     <iframe
-      ref={iframeRef}
       srcDoc={content}
       title={title}
-      className="w-full border-0 bg-background"
-      style={{ height }}
+      className="h-full w-full border-0 bg-background"
     />
   );
 }
@@ -605,12 +709,15 @@ function KnowledgeFileBody({
   content,
   truncated,
   browseURL,
+  fullscreen = false,
 }: {
   currentPath: string;
   media: string;
   content: string;
   truncated: boolean;
   browseURL: string;
+  /** Widen for the full-screen reader (see `readingWidthClass`). */
+  fullscreen?: boolean;
 }) {
   const { t } = useT("knowledge");
 
@@ -653,13 +760,18 @@ function KnowledgeFileBody({
         </p>
       ) : null}
       {media === "markdown" ? (
-        <div className="mx-auto w-full max-w-[96ch] px-6 pb-24 pt-7 sm:px-8 lg:px-10">
+        <div className={cn(readingWidthClass(fullscreen), "px-6 pb-24 pt-7 sm:px-8 lg:px-10")}>
           <RichContent content={resolvedContent} density="document" phase="settled" />
         </div>
       ) : media === "html" ? (
         <HtmlPreview content={resolvedContent} title={currentPath} />
       ) : (
-        <pre className="mx-auto w-full max-w-[96ch] overflow-x-auto px-6 py-7 font-mono text-caption leading-relaxed text-foreground sm:px-8 lg:px-10">
+        <pre
+          className={cn(
+            readingWidthClass(fullscreen),
+            "overflow-x-auto px-6 py-7 font-mono text-caption leading-relaxed text-foreground sm:px-8 lg:px-10",
+          )}
+        >
           {resolvedContent}
         </pre>
       )}
