@@ -19,6 +19,8 @@
     "hide_dot_prefixed_aria": "名前がドットで始まるファイルとフォルダを非表示",
     "refresh": "更新",
     "refresh_aria": "Git からナレッジを再取得",
+    "fullscreen_enter": "全画面で読む",
+    "fullscreen_exit": "全画面を終了",
     "copy_path": "パスをコピー",
     "copy_wiki_link": "[[path]] としてコピー",
     "copy_path_aria": "ファイルパスをコピー",
