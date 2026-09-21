@@ -19,6 +19,8 @@
     "hide_dot_prefixed_aria": "Hide files and folders whose names start with a dot",
     "refresh": "Refresh",
     "refresh_aria": "Refresh knowledge base from Git",
+    "fullscreen_enter": "Read full screen",
+    "fullscreen_exit": "Exit full screen",
     "copy_path": "Copy path",
     "copy_wiki_link": "Copy as [[path]]",
     "copy_path_aria": "Copy file path",

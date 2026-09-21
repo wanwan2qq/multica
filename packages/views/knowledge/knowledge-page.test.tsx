@@ -2,11 +2,12 @@
 
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nProvider } from "@multica/core/i18n/react";
 import { ApiError } from "@multica/core/api";
+import { SidebarProvider, useSidebarSafe } from "@multica/ui/components/ui/sidebar";
 import enCommon from "../locales/en/common.json";
 import enKnowledge from "../locales/en/knowledge.json";
 import enSkills from "../locales/en/skills.json";
@@ -135,8 +136,8 @@ vi.mock("../rich-content", () => ({
   RichContent: ({ content }: { content: string }) => <div>{content}</div>,
 }));
 
-function renderPage() {
-  const nav: NavigationAdapter = {
+function navigationAdapter(): NavigationAdapter {
+  return {
     pathname: "/acme/knowledge",
     searchParams: searchRef.current,
     hash: "",
@@ -145,6 +146,10 @@ function renderPage() {
     back: vi.fn(),
     getShareableUrl: (path) => path,
   };
+}
+
+function renderPage() {
+  const nav = navigationAdapter();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <I18nProvider locale="en" resources={TEST_RESOURCES}>
@@ -154,6 +159,23 @@ function renderPage() {
         </NavigationProvider>
       </QueryClientProvider>
     </I18nProvider>,
+  );
+}
+
+// The nav lives in the shell, not in this page. `SidebarProvider` is only
+// mounted by the full-screen tests below; everywhere else `useSidebarSafe`
+// reports no shell and the page has to keep working, which the rest of the
+// file covers by simply not wrapping it.
+function NavStateProbe() {
+  const sidebar = useSidebarSafe();
+  return (
+    <button
+      type="button"
+      data-testid="nav-state"
+      onClick={() => sidebar?.toggleSidebar()}
+    >
+      {sidebar?.state ?? "no-shell"}
+    </button>
   );
 }
 
@@ -195,6 +217,14 @@ describe("KnowledgePage", () => {
   afterEach(() => {
     cleanup();
   });
+
+  // The same fixture with an HTML body, which the page renders in an iframe
+  // rather than through the rich-content reader.
+  function openHtmlFile(filePath = "page.html") {
+    openMarkdownFile(filePath);
+    const data = fileRef.current.data as { [key: string]: unknown };
+    fileRef.current.data = { ...data, media: "html", content: "<p>Hello HTML</p>" };
+  }
 
   // A rendered markdown file plus the tree entry that resolves it, so a test
   // can get to the breadcrumb without restating the whole fixture.
@@ -440,6 +470,32 @@ describe("KnowledgePage", () => {
     expect(iframe?.getAttribute("srcDoc")).toContain("Hello HTML");
     expect(screen.queryByText(/HTML preview is sandboxed/)).toBeNull();
     expect(screen.queryByText(/沙箱/)).toBeNull();
+  });
+
+  it("keeps the file bar out of the scrolling region", () => {
+    // The path and the file's own actions are the reader's chrome: a long
+    // document has to scroll under the bar instead of carrying it away. jsdom
+    // has no layout, so the structure that guarantees it is asserted.
+    openMarkdownFile();
+    renderPage();
+    const bar = screen.getByLabelText("File path");
+    const scroller = document.querySelector("[data-tab-scroll-root]");
+    expect(scroller?.contains(bar)).toBe(false);
+    expect(scroller?.textContent).toContain("# Hello KB");
+  });
+
+  it("sizes the html frame by layout, below the file bar", () => {
+    // The frame is the scroller's only child, so the space under the bar is
+    // the space it gets — no measured height to go stale when the bar shows up
+    // (it only appears once the file resolves, and the frame is already
+    // mounted by then).
+    openHtmlFile();
+    renderPage();
+    const iframe = document.querySelector("iframe") as HTMLIFrameElement;
+    const scroller = document.querySelector("[data-tab-scroll-root]");
+    expect(scroller?.contains(iframe)).toBe(true);
+    expect(iframe.className).toContain("h-full");
+    expect(iframe.style.height).toBe("");
   });
 
   it("passes wsId + activeRef into the knowledge tree query key", () => {
@@ -794,6 +850,123 @@ describe("KnowledgePage", () => {
     await user.click(screen.getByRole("button", { name: "Refresh knowledge base from Git" }));
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["workspaces", "ws-1", "knowledge"],
+    });
+  });
+
+  // Full screen reaches outside the page: it takes the reader's tree and the
+  // shell's nav away and has to give both back. That needs a real
+  // `SidebarProvider` around the page plus a probe beside it, because the nav
+  // state has to stay observable at the moment the page itself is gone. The
+  // provider reads its width bands from `matchMedia`, which jsdom answers with
+  // "no match" — desktop width, so the nav starts expanded.
+  describe("full-screen reading", () => {
+    function navState() {
+      return screen.getByTestId("nav-state").textContent;
+    }
+
+    function renderShell() {
+      const nav = navigationAdapter();
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const shell = (withPage: boolean) => (
+        <I18nProvider locale="en" resources={TEST_RESOURCES}>
+          <QueryClientProvider client={client}>
+            <NavigationProvider value={nav}>
+              <SidebarProvider>
+                <NavStateProbe />
+                {withPage ? <KnowledgePage /> : null}
+              </SidebarProvider>
+            </NavigationProvider>
+          </QueryClientProvider>
+        </I18nProvider>
+      );
+      const view = render(shell(true));
+      return {
+        // Routing away unmounts the page but not the shell, so the probe is
+        // still there to report whether the nav was restored.
+        leavePage: () => view.rerender(shell(false)),
+      };
+    }
+
+    it("hides the tree and parks the nav, and Escape brings both back", async () => {
+      openMarkdownFile();
+      renderShell();
+      expect(screen.getByLabelText("Knowledge files")).toBeTruthy();
+      expect(navState()).toBe("expanded");
+
+      await userEvent.click(screen.getByRole("button", { name: "Read full screen" }));
+
+      expect(screen.queryByLabelText("Knowledge files")).toBeNull();
+      expect(navState()).toBe("collapsed");
+      // The furniture goes, not the document.
+      expect(screen.getByText("# Hello KB")).toBeTruthy();
+
+      fireEvent.keyDown(document, { key: "Escape" });
+
+      expect(navState()).toBe("expanded");
+      expect(screen.getByLabelText("Knowledge files")).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "Read full screen" }).getAttribute("aria-pressed"),
+      ).toBe("false");
+    });
+
+    it("reads at a wider measure inside full screen", async () => {
+      openMarkdownFile();
+      renderShell();
+      const proseColumn = () => screen.getByText("# Hello KB").parentElement;
+      expect(proseColumn()?.className).toContain("max-w-[96ch]");
+
+      await userEvent.click(screen.getByRole("button", { name: "Read full screen" }));
+
+      expect(proseColumn()?.className).toContain("max-w-[120ch]");
+    });
+
+    it("leaves Escape to whatever is open above the reader", async () => {
+      // A menu or dialog closes on the same key. The reader must not exit
+      // behind it and swallow the second Escape as well.
+      openMarkdownFile();
+      renderShell();
+      await userEvent.click(screen.getByRole("button", { name: "Read full screen" }));
+
+      const layer = document.createElement("div");
+      layer.setAttribute("role", "dialog");
+      const control = document.createElement("button");
+      layer.appendChild(control);
+      document.body.appendChild(layer);
+      try {
+        fireEvent.keyDown(control, { key: "Escape" });
+
+        expect(navState()).toBe("collapsed");
+        expect(screen.queryByLabelText("Knowledge files")).toBeNull();
+      } finally {
+        layer.remove();
+      }
+    });
+
+    it("restores the nav when the reader leaves full screen by routing away", async () => {
+      openMarkdownFile();
+      const { leavePage } = renderShell();
+      await userEvent.click(screen.getByRole("button", { name: "Read full screen" }));
+      expect(navState()).toBe("collapsed");
+
+      leavePage();
+
+      expect(navState()).toBe("expanded");
+    });
+
+    it("leaves a nav the reader had closed closed on the way out", async () => {
+      // Entering parks the nav either way, but exiting must not push it open
+      // on someone who keeps it collapsed.
+      openMarkdownFile();
+      renderShell();
+      fireEvent.click(screen.getByTestId("nav-state"));
+      expect(navState()).toBe("collapsed");
+
+      await userEvent.click(screen.getByRole("button", { name: "Read full screen" }));
+      expect(navState()).toBe("collapsed");
+
+      fireEvent.keyDown(document, { key: "Escape" });
+
+      expect(navState()).toBe("collapsed");
     });
   });
 });

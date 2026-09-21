@@ -19,6 +19,8 @@
     "hide_dot_prefixed_aria": "隐藏以点号开头的文件和文件夹",
     "refresh": "刷新",
     "refresh_aria": "从 Git 刷新知识库",
+    "fullscreen_enter": "全屏阅读",
+    "fullscreen_exit": "退出全屏",
     "copy_path": "复制路径",
     "copy_wiki_link": "复制为 [[path]]",
     "copy_path_aria": "复制文件路径",
