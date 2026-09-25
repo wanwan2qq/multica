@@ -282,7 +282,7 @@ func workspaceReposResponse(workspaceID string, raw []byte, settingsRaw []byte) 
 		ReposVersion: workspaceReposVersion(repos),
 	}
 	if len(settingsRaw) > 0 {
-		resp.Settings = json.RawMessage(settingsRaw)
+		resp.Settings = json.RawMessage(redactKnowledgeGitTokenJSON(settingsRaw))
 	}
 	return resp
 }

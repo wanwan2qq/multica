@@ -13,6 +13,8 @@ export interface Workspace {
   context: string | null;
   settings: Record<string, unknown>;
   repos: WorkspaceRepo[];
+  /** True when this workspace has a knowledge-browse token. The token is never returned. */
+  knowledge_git_token_configured?: boolean;
   issue_prefix: string;
   avatar_url: string | null;
   created_at: string;

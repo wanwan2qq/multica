@@ -360,6 +360,27 @@ describe("KnowledgePage", () => {
     ).toBeNull();
   });
 
+  it("shows the load error when the tree request fails before any ref lands", () => {
+    treeRef.current = {
+      isPending: false,
+      isError: true,
+      isFetching: false,
+      isSuccess: false,
+      data: undefined,
+      error: new ApiError("failed to list repository tree (HTTP 401)", 502, "Bad Gateway"),
+    };
+    renderPage();
+    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(screen.getByText("Couldn't load the knowledge base")).toBeTruthy();
+    expect(screen.getByText("failed to list repository tree (HTTP 401)")).toBeTruthy();
+    expect(screen.getByText(/knowledge access token/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open repositories" })).toHaveAttribute(
+      "href",
+      "/acme/settings?tab=repositories",
+    );
+    expect(screen.queryByText("Select a file")).toBeNull();
+  });
+
   it("asks the user to label a repo when none is configured", () => {
     treeRef.current = {
       isPending: false,
@@ -373,6 +394,7 @@ describe("KnowledgePage", () => {
     };
     renderPage();
     expect(screen.getByText("No knowledge repository")).toBeTruthy();
+    expect(screen.getByText(/knowledge access token/)).toBeTruthy();
     const links = screen.getAllByRole("button", { name: "Open repositories" });
     expect(links.length).toBeGreaterThan(0);
     expect(links[0]).toHaveAttribute(
