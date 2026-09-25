@@ -954,7 +954,16 @@
     "url_label": "저장소 URL",
     "description_label": "설명",
     "duplicate": "이미 추가된 저장소입니다.",
-    "actions_aria": "{{url}} 작업"
+    "actions_aria": "{{url}} 작업",
+    "knowledge_token_title": "지식 베이스 액세스 토큰",
+    "knowledge_token_description": "비공개 지식 베이스는 워크스페이스별 토큰을 사용합니다. 토큰은 서버에만 저장되며 다시 표시되지 않습니다. 비어 있으면 서버의 KNOWLEDGE_GIT_TOKEN을 사용합니다.",
+    "knowledge_token_placeholder": "GitLab 또는 Gitea 액세스 토큰 붙여넣기",
+    "knowledge_token_configured": "토큰이 저장되어 있습니다. 새 토큰을 입력하면 바뀝니다.",
+    "knowledge_token_save": "토큰 저장",
+    "knowledge_token_clear": "토큰 지우기",
+    "knowledge_token_saved": "지식 베이스 액세스 토큰을 저장했습니다",
+    "knowledge_token_cleared": "지식 베이스 액세스 토큰을 지웠습니다",
+    "knowledge_token_save_failed": "지식 베이스 액세스 토큰을 저장하지 못했습니다"
   },
   "desktop": {
     "tabs": {

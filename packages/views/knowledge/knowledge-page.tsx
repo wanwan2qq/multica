@@ -143,7 +143,10 @@ export function KnowledgePage() {
   const treeIsForCurrentRef = treeQuery.data?.ref === activeRef;
   const hasStaleTreeData = Boolean(treeQuery.data) && !treeIsForCurrentRef;
   const showTreePending = treeQuery.isPending || hasStaleTreeData;
-  const showTreeError = treeQuery.isError && treeIsForCurrentRef;
+  // A failed first load has no `data.ref`, so matching the active branch would
+  // hide the error and paint the empty-tree state instead.
+  const showTreeError =
+    treeQuery.isError && (treeIsForCurrentRef || treeQuery.data == null);
   const showInitialTreeLoad = showTreePending && !treeQuery.data;
 
   const allFiles = useMemo(
@@ -520,9 +523,23 @@ export function KnowledgePage() {
           icon={AlertCircle}
           title={t(($) => $.empty.load_error_title)}
           description={
-            treeQuery.error instanceof Error
-              ? treeQuery.error.message
-              : t(($) => $.empty.load_error_fallback)
+            <>
+              <span className="block">
+                {treeQuery.error instanceof Error
+                  ? treeQuery.error.message
+                  : t(($) => $.empty.load_error_fallback)}
+              </span>
+              <span className="mt-2 block">{t(($) => $.empty.setup_hint)}</span>
+            </>
+          }
+          actions={
+            <Button
+              size="sm"
+              render={<AppLink href={reposHref} />}
+              nativeButton={false}
+            >
+              {t(($) => $.empty.open_repositories)}
+            </Button>
           }
         />
       ) : fullscreen ? (

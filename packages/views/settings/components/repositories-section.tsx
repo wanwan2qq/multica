@@ -150,6 +150,8 @@ export function RepositoriesSection() {
     Map<number, GitHubRepository>
   >(new Map());
   const [repositorySearch, setRepositorySearch] = useState("");
+  const [knowledgeToken, setKnowledgeToken] = useState("");
+  const [savingKnowledgeToken, setSavingKnowledgeToken] = useState(false);
 
   const {
     data: githubData,
@@ -366,6 +368,40 @@ export function RepositoriesSection() {
       return;
     }
     if (await persist([...repositories, ...additions])) closeGitHubPicker();
+  };
+
+  // KB-HOOK: the knowledge token is written through its own field, so a
+  // settings save that never sees the token cannot clear it.
+  const saveKnowledgeToken = async (next: string) => {
+    if (!workspace) return;
+    setSavingKnowledgeToken(true);
+    try {
+      const updated = await api.updateWorkspace(workspace.id, {
+        knowledge_git_token: next,
+      });
+      queryClient.setQueryData(
+        workspaceKeys.list(),
+        (old: Workspace[] | undefined) =>
+          old?.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setKnowledgeToken("");
+      toast.success(
+        t(($) =>
+          next.trim()
+            ? $.repositories.knowledge_token_saved
+            : $.repositories.knowledge_token_cleared,
+        ),
+        { id: "settings-auto-save" },
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t(($) => $.repositories.knowledge_token_save_failed),
+      );
+    } finally {
+      setSavingKnowledgeToken(false);
+    }
   };
 
   if (!workspace) return null;
@@ -585,6 +621,61 @@ export function RepositoriesSection() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <SettingsSection
+        title={t(($) => $.repositories.knowledge_token_title)}
+        description={t(($) => $.repositories.knowledge_token_description)}
+        anchor="knowledge-token"
+      >
+        <SettingsCard>
+          {canManageWorkspace ? (
+            <div className="space-y-3 px-4 py-3.5">
+              {workspace.knowledge_git_token_configured ? (
+                <p className="text-caption text-muted-foreground">
+                  {t(($) => $.repositories.knowledge_token_configured)}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="password"
+                  name="knowledge-git-token"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="max-w-md"
+                  aria-label={t(($) => $.repositories.knowledge_token_title)}
+                  placeholder={t(($) => $.repositories.knowledge_token_placeholder)}
+                  value={knowledgeToken}
+                  onChange={(event) => setKnowledgeToken(event.target.value)}
+                />
+                <Button
+                  size="sm"
+                  disabled={savingKnowledgeToken || knowledgeToken.trim().length === 0}
+                  onClick={() => void saveKnowledgeToken(knowledgeToken)}
+                >
+                  {savingKnowledgeToken ? (
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                  ) : null}
+                  {t(($) => $.repositories.knowledge_token_save)}
+                </Button>
+                {workspace.knowledge_git_token_configured ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={savingKnowledgeToken}
+                    onClick={() => void saveKnowledgeToken("")}
+                  >
+                    {t(($) => $.repositories.knowledge_token_clear)}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 py-3 text-caption text-muted-foreground">
+              {t(($) => $.repositories.manage_hint)}
+            </div>
+          )}
+        </SettingsCard>
+      </SettingsSection>
 
       <Dialog
         open={githubPickerOpen}

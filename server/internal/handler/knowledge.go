@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,42 +65,43 @@ func isKnowledgeDescription(description string) bool {
 	return strings.Contains(description, "知识库") || strings.Contains(lower, "knowledge")
 }
 
-func (h *Handler) loadKnowledgeRepo(w http.ResponseWriter, r *http.Request) (workspaceRepoRef, gitRemote, bool) {
+func (h *Handler) loadKnowledgeRepo(w http.ResponseWriter, r *http.Request) (workspaceRepoRef, gitRemote, string, bool) {
 	workspaceID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "id"), "workspace_id")
 	if !ok {
-		return workspaceRepoRef{}, gitRemote{}, false
+		return workspaceRepoRef{}, gitRemote{}, "", false
 	}
 	ws, err := h.Queries.GetWorkspace(r.Context(), workspaceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "workspace not found")
-		return workspaceRepoRef{}, gitRemote{}, false
+		return workspaceRepoRef{}, gitRemote{}, "", false
 	}
 	var repos []workspaceRepoRef
 	if len(ws.Repos) > 0 {
 		if err := json.Unmarshal(ws.Repos, &repos); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to read workspace repositories")
-			return workspaceRepoRef{}, gitRemote{}, false
+			return workspaceRepoRef{}, gitRemote{}, "", false
 		}
 	}
 	repo, ok := pickKnowledgeRepo(repos)
 	if !ok {
 		writeErrorCode(w, http.StatusNotFound, "knowledge_repo_not_configured", "no knowledge repository configured; add a workspace repo whose description contains 知识库 or knowledge")
-		return workspaceRepoRef{}, gitRemote{}, false
+		return workspaceRepoRef{}, gitRemote{}, "", false
 	}
 	remote, err := parseGitRemote(repo.URL)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
-		return workspaceRepoRef{}, gitRemote{}, false
+		return workspaceRepoRef{}, gitRemote{}, "", false
 	}
-	return repo, remote, true
+	return repo, remote, knowledgeGitTokenFromSettings(ws.Settings), true
 }
 
 func (h *Handler) GetKnowledgeTree(w http.ResponseWriter, r *http.Request) {
-	repo, remote, ok := h.loadKnowledgeRepo(w, r)
+	repo, remote, token, ok := h.loadKnowledgeRepo(w, r)
 	if !ok {
 		return
 	}
-	ref, entries, err := fetchKnowledgeTreeHTTP(r.Context(), remote, r.URL.Query().Get("ref"))
+	ctx := withKnowledgeToken(r.Context(), token)
+	ref, entries, err := fetchKnowledgeTreeHTTP(ctx, remote, r.URL.Query().Get("ref"))
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -137,12 +139,12 @@ func knowledgePathParam(w http.ResponseWriter, r *http.Request) (string, bool) {
 
 // knowledgeRef resolves the caller's `ref`, falling back to the repository's
 // default branch when they did not pin one.
-func knowledgeRef(w http.ResponseWriter, r *http.Request, remote gitRemote) (string, bool) {
+func knowledgeRef(w http.ResponseWriter, r *http.Request, ctx context.Context, remote gitRemote) (string, bool) {
 	ref := strings.TrimSpace(r.URL.Query().Get("ref"))
 	if ref != "" {
 		return ref, true
 	}
-	resolved, err := resolveDefaultRefHTTP(r.Context(), remote)
+	resolved, err := resolveDefaultRefHTTP(ctx, remote)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return "", false
@@ -158,7 +160,7 @@ func knowledgeRef(w http.ResponseWriter, r *http.Request, remote gitRemote) (str
 // whole blob instead, so PDFs, images and oversized documents arrive intact
 // rather than as a truncated preview or a "can't preview this" notice.
 func (h *Handler) GetKnowledgeDownload(w http.ResponseWriter, r *http.Request) {
-	_, remote, ok := h.loadKnowledgeRepo(w, r)
+	_, remote, token, ok := h.loadKnowledgeRepo(w, r)
 	if !ok {
 		return
 	}
@@ -166,11 +168,12 @@ func (h *Handler) GetKnowledgeDownload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ref, ok := knowledgeRef(w, r, remote)
+	ctx := withKnowledgeToken(r.Context(), token)
+	ref, ok := knowledgeRef(w, r, ctx, remote)
 	if !ok {
 		return
 	}
-	body, oversized, err := fetchKnowledgeFileDownloadHTTP(r.Context(), remote, ref, filePath)
+	body, oversized, err := fetchKnowledgeFileDownloadHTTP(ctx, remote, ref, filePath)
 	if err != nil {
 		if errors.Is(err, errKnowledgeFileNotFound) {
 			writeError(w, http.StatusNotFound, "file not found")
@@ -204,7 +207,7 @@ func knowledgeDownloadContentType(filePath string) string {
 }
 
 func (h *Handler) GetKnowledgeFile(w http.ResponseWriter, r *http.Request) {
-	_, remote, ok := h.loadKnowledgeRepo(w, r)
+	_, remote, token, ok := h.loadKnowledgeRepo(w, r)
 	if !ok {
 		return
 	}
@@ -212,11 +215,12 @@ func (h *Handler) GetKnowledgeFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ref, ok := knowledgeRef(w, r, remote)
+	ctx := withKnowledgeToken(r.Context(), token)
+	ref, ok := knowledgeRef(w, r, ctx, remote)
 	if !ok {
 		return
 	}
-	body, truncated, err := fetchKnowledgeFileHTTP(r.Context(), remote, ref, filePath)
+	body, truncated, err := fetchKnowledgeFileHTTP(ctx, remote, ref, filePath)
 	if err != nil {
 		if errors.Is(err, errKnowledgeFileNotFound) {
 			writeError(w, http.StatusNotFound, "file not found")
@@ -251,11 +255,11 @@ type knowledgeBranchesResponse struct {
 }
 
 func (h *Handler) GetKnowledgeBranches(w http.ResponseWriter, r *http.Request) {
-	_, remote, ok := h.loadKnowledgeRepo(w, r)
+	_, remote, token, ok := h.loadKnowledgeRepo(w, r)
 	if !ok {
 		return
 	}
-	names, def, err := fetchKnowledgeBranchesHTTP(r.Context(), remote)
+	names, def, err := fetchKnowledgeBranchesHTTP(withKnowledgeToken(r.Context(), token), remote)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return

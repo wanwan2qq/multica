@@ -1214,7 +1214,16 @@
     "url_label": "リポジトリ URL",
     "description_label": "説明",
     "duplicate": "このリポジトリは追加済みです。",
-    "actions_aria": "{{url}} の操作"
+    "actions_aria": "{{url}} の操作",
+    "knowledge_token_title": "ナレッジのアクセストークン",
+    "knowledge_token_description": "非公開のナレッジリポジトリはワークスペースごとのトークンを使います。トークンはサーバーにだけ保存され、再表示されません。未設定のときはサーバーの KNOWLEDGE_GIT_TOKEN を使います。",
+    "knowledge_token_placeholder": "GitLab または Gitea のアクセストークンを貼り付け",
+    "knowledge_token_configured": "トークンは保存済みです。新しい値を入力すると置き換わります。",
+    "knowledge_token_save": "トークンを保存",
+    "knowledge_token_clear": "トークンを消去",
+    "knowledge_token_saved": "ナレッジのアクセストークンを保存しました",
+    "knowledge_token_cleared": "ナレッジのアクセストークンを消去しました",
+    "knowledge_token_save_failed": "ナレッジのアクセストークンを保存できませんでした"
   },
   "desktop": {
     "tabs": {
