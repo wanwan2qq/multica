@@ -33,7 +33,8 @@
   },
   "empty": {
     "not_configured_title": "ナレッジリポジトリが未設定です",
-    "not_configured_description": "設定 → リポジトリに Git URL を追加し、説明に「知識庫」または knowledge を入れてください。全員が見るのはリモートのデフォルトブランチです。",
+    "not_configured_description": "設定 → リポジトリに Git URL を追加し、説明に「知識庫」または knowledge を入れてください。非公開リポジトリはナレッジのアクセストークンも保存します。全員が見るのはリモートのデフォルトブランチです。",
+    "setup_hint": "設定 → リポジトリの説明に「知識庫」または knowledge を入れてください。非公開リポジトリにはナレッジのアクセストークンも必要です。",
     "open_repositories": "リポジトリを開く",
     "no_file_title": "ファイルを選択",
     "no_file_description": "ツリーから Markdown を選ぶとプレビューできます。編集は Git 側で行います。",

@@ -1212,7 +1212,16 @@
     "url_label": "仓库 URL",
     "description_label": "描述",
     "duplicate": "这个仓库已经添加过了。",
-    "actions_aria": "{{url}} 的操作"
+    "actions_aria": "{{url}} 的操作",
+    "knowledge_token_title": "知识库访问令牌",
+    "knowledge_token_description": "私有知识库按工作区单独配置。令牌只保存在服务器上，保存后不会回显。未填写时仍使用服务器的 KNOWLEDGE_GIT_TOKEN。",
+    "knowledge_token_placeholder": "粘贴 GitLab 或 Gitea 访问令牌",
+    "knowledge_token_configured": "已配置。输入新令牌会替换当前值。",
+    "knowledge_token_save": "保存令牌",
+    "knowledge_token_clear": "清除令牌",
+    "knowledge_token_saved": "已保存知识库访问令牌",
+    "knowledge_token_cleared": "已清除知识库访问令牌",
+    "knowledge_token_save_failed": "保存知识库访问令牌失败"
   },
   "desktop": {
     "tabs": {

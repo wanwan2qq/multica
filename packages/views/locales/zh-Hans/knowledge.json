@@ -33,7 +33,8 @@
   },
   "empty": {
     "not_configured_title": "尚未配置知识库仓库",
-    "not_configured_description": "到设置 → 代码仓库添加 Git URL，并在说明里写上「知识库」或 knowledge。所有成员看到的都是远程默认分支，不是某人本机副本。",
+    "not_configured_description": "到设置 → 代码仓库添加 Git 地址，并在说明里写上「知识库」或 knowledge。私有仓库再保存「知识库访问令牌」。所有成员看到的都是远程默认分支。",
+    "setup_hint": "到设置 → 代码仓库：说明里写上「知识库」或 knowledge；私有仓库再保存「知识库访问令牌」。",
     "open_repositories": "打开代码仓库",
     "no_file_title": "选择一个文件",
     "no_file_description": "从目录树点开 Markdown 即可预览。编辑仍在 Git 完成。",

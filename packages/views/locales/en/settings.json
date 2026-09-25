@@ -1218,7 +1218,16 @@
     "url_label": "Repository URL",
     "description_label": "Description",
     "duplicate": "This repository is already added.",
-    "actions_aria": "Actions for {{url}}"
+    "actions_aria": "Actions for {{url}}",
+    "knowledge_token_title": "Knowledge access token",
+    "knowledge_token_description": "Private knowledge repositories use a token saved for this workspace. The token stays on the server and is never shown again. When this is empty, the server falls back to KNOWLEDGE_GIT_TOKEN.",
+    "knowledge_token_placeholder": "Paste a GitLab or Gitea access token",
+    "knowledge_token_configured": "A token is saved. Entering a new one replaces it.",
+    "knowledge_token_save": "Save token",
+    "knowledge_token_clear": "Clear token",
+    "knowledge_token_saved": "Knowledge access token saved",
+    "knowledge_token_cleared": "Knowledge access token cleared",
+    "knowledge_token_save_failed": "Couldn't save the knowledge access token"
   },
   "desktop": {
     "tabs": {
