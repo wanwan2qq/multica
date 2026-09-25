@@ -104,8 +104,11 @@ type WorkspaceResponse struct {
 	Repos       any     `json:"repos"`
 	IssuePrefix string  `json:"issue_prefix"`
 	AvatarURL   *string `json:"avatar_url"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	// KnowledgeGitTokenConfigured reports that this workspace has a browse
+	// credential. The token itself is never serialized.
+	KnowledgeGitTokenConfigured bool   `json:"knowledge_git_token_configured"`
+	CreatedAt                   string `json:"created_at"`
+	UpdatedAt                   string `json:"updated_at"`
 }
 
 func (h *Handler) workspaceToResponse(w db.Workspace) WorkspaceResponse {
@@ -116,6 +119,13 @@ func (h *Handler) workspaceToResponse(w db.Workspace) WorkspaceResponse {
 	if settings == nil {
 		settings = map[string]any{}
 	}
+	knowledgeTokenConfigured := false
+	if settingsMap, ok := settings.(map[string]any); ok {
+		if token, _ := settingsMap[knowledgeGitTokenSettingsKey].(string); strings.TrimSpace(token) != "" {
+			knowledgeTokenConfigured = true
+		}
+		delete(settingsMap, knowledgeGitTokenSettingsKey)
+	}
 	var repos any
 	if w.Repos != nil {
 		json.Unmarshal(w.Repos, &repos)
@@ -124,17 +134,18 @@ func (h *Handler) workspaceToResponse(w db.Workspace) WorkspaceResponse {
 		repos = []any{}
 	}
 	return WorkspaceResponse{
-		ID:          uuidToString(w.ID),
-		Name:        w.Name,
-		Slug:        w.Slug,
-		Description: textToPtr(w.Description),
-		Context:     textToPtr(w.Context),
-		Settings:    settings,
-		Repos:       repos,
-		IssuePrefix: w.IssuePrefix,
-		AvatarURL:   h.resolveAvatarURLPtr(textToPtr(w.AvatarUrl)),
-		CreatedAt:   timestampToString(w.CreatedAt),
-		UpdatedAt:   timestampToString(w.UpdatedAt),
+		ID:                          uuidToString(w.ID),
+		Name:                        w.Name,
+		Slug:                        w.Slug,
+		Description:                 textToPtr(w.Description),
+		Context:                     textToPtr(w.Context),
+		Settings:                    settings,
+		Repos:                       repos,
+		IssuePrefix:                 w.IssuePrefix,
+		AvatarURL:                   h.resolveAvatarURLPtr(textToPtr(w.AvatarUrl)),
+		KnowledgeGitTokenConfigured: knowledgeTokenConfigured,
+		CreatedAt:                   timestampToString(w.CreatedAt),
+		UpdatedAt:                   timestampToString(w.UpdatedAt),
 	}
 }
 
@@ -327,6 +338,11 @@ type UpdateWorkspaceRequest struct {
 	Repos       any     `json:"repos"`
 	IssuePrefix *string `json:"issue_prefix"`
 	AvatarURL   *string `json:"avatar_url"`
+	// KnowledgeGitToken sets or clears the per-workspace browse credential.
+	// Nil leaves the stored value alone. An empty string clears it. The value
+	// is not accepted inside settings, so a general settings save cannot drop
+	// or echo it.
+	KnowledgeGitToken *string `json:"knowledge_git_token"`
 }
 
 type workspaceRepoRef struct {
@@ -370,6 +386,47 @@ func validateAndNormalizeWorkspaceRepos(value any) ([]byte, error) {
 	return out, nil
 }
 
+// mergeWorkspaceSettings applies a settings replacement while keeping the
+// knowledge browse credential stable. The credential is written only through
+// knowledgeGitToken; a settings payload cannot set or clear it.
+func mergeWorkspaceSettings(ctx context.Context, h *Handler, id pgtype.UUID, incoming any, token *string) ([]byte, error) {
+	existing, err := h.Queries.GetWorkspace(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	existingToken := knowledgeGitTokenFromSettings(existing.Settings)
+	stored := map[string]any{}
+	if len(existing.Settings) > 0 {
+		if err := json.Unmarshal(existing.Settings, &stored); err != nil || stored == nil {
+			stored = map[string]any{}
+		}
+	}
+	settings := map[string]any{}
+	if incoming != nil {
+		raw, err := json.Marshal(incoming)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(raw, &settings); err != nil || settings == nil {
+			settings = map[string]any{}
+		}
+		// Only an old client's flip of the retired PR switch needs the stored
+		// value; see reconcilePRMergeSettings.
+		reconcilePRMergeSettings(stored, settings)
+	} else {
+		settings = stored
+	}
+	delete(settings, knowledgeGitTokenSettingsKey)
+	next := existingToken
+	if token != nil {
+		next = strings.TrimSpace(*token)
+	}
+	if next != "" {
+		settings[knowledgeGitTokenSettingsKey] = next
+	}
+	return json.Marshal(settings)
+}
+
 func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 	id := workspaceIDFromURL(r, "id")
 	idUUID, ok := parseUUIDOrBadRequest(w, id, "workspace id")
@@ -400,20 +457,15 @@ func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 	if req.Context != nil {
 		params.Context = pgtype.Text{String: *req.Context, Valid: true}
 	}
-	if req.Settings != nil {
-		if incoming, ok := req.Settings.(map[string]any); ok {
-			// Only an old client's flip of the retired PR switch needs the
-			// stored value; see reconcilePRMergeSettings.
-			var stored map[string]any
-			if _, sent := incoming[prAutoCompleteLegacyKey]; sent {
-				if existing, err := h.Queries.GetWorkspace(r.Context(), idUUID); err == nil {
-					_ = json.Unmarshal(existing.Settings, &stored)
-				}
-			}
-			reconcilePRMergeSettings(stored, incoming)
+	if req.Settings != nil || req.KnowledgeGitToken != nil {
+		// KB-HOOK: merges over the stored blob so a settings save from a client
+		// that never sees the knowledge token cannot drop it.
+		merged, err := mergeWorkspaceSettings(r.Context(), h, idUUID, req.Settings, req.KnowledgeGitToken)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to read workspace settings")
+			return
 		}
-		s, _ := json.Marshal(req.Settings)
-		params.Settings = s
+		params.Settings = merged
 	}
 	if req.Repos != nil {
 		reposJSON, err := validateAndNormalizeWorkspaceRepos(req.Repos)

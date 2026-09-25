@@ -128,6 +128,38 @@ func TestFetchKnowledgeTreeAndFileHTTP(t *testing.T) {
 	}
 }
 
+func TestKnowledgeTokenFromContextOverridesEnv(t *testing.T) {
+	t.Setenv("KNOWLEDGE_GIT_TOKEN", "from-env")
+	prev := knowledgeHTTPClient
+	t.Cleanup(func() { knowledgeHTTPClient = prev })
+	knowledgeHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Header.Get("PRIVATE-TOKEN") != "from-workspace" {
+			t.Errorf("PRIVATE-TOKEN = %q, want workspace token", req.Header.Get("PRIVATE-TOKEN"))
+		}
+		return jsonResponse(http.StatusOK, `{"default_branch":"master"}`), nil
+	})}
+
+	ctx := withKnowledgeToken(context.Background(), "from-workspace")
+	remote := gitRemote{Host: "git.lianjia.com", Owner: "lft/lft-account", Repo: "lft_workspace", Provider: "gitlab"}
+	if _, err := resolveDefaultRefHTTP(ctx, remote); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRedactKnowledgeGitTokenJSON(t *testing.T) {
+	raw := []byte(`{"theme":"dark","knowledge_git_token":"secret"}`)
+	out := redactKnowledgeGitTokenJSON(raw)
+	if strings.Contains(string(out), "secret") || strings.Contains(string(out), "knowledge_git_token") {
+		t.Fatalf("token leaked: %s", out)
+	}
+	if !strings.Contains(string(out), "dark") {
+		t.Fatalf("other settings dropped: %s", out)
+	}
+	if got := knowledgeGitTokenFromSettings(raw); got != "secret" {
+		t.Fatalf("token = %q", got)
+	}
+}
+
 func TestFetchGitLabKnowledgeTreeAndFileHTTP(t *testing.T) {
 	t.Setenv("KNOWLEDGE_GIT_TOKEN", "glpat-test")
 	prev := knowledgeHTTPClient

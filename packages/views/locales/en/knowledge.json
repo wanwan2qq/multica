@@ -34,7 +34,8 @@
   },
   "empty": {
     "not_configured_title": "No knowledge repository",
-    "not_configured_description": "Add a Git URL in Settings → Repositories, and put 知识库 or knowledge in the description so every member sees the same remote default branch.",
+    "not_configured_description": "In Settings → Repositories, add a Git URL and put 知识库 or knowledge in the description. For a private repository, also save a knowledge access token. Everyone sees the remote default branch.",
+    "setup_hint": "In Settings → Repositories, put 知识库 or knowledge in the description. A private repository also needs a knowledge access token.",
     "open_repositories": "Open repositories",
     "no_file_title": "Select a file",
     "no_file_description": "Pick a Markdown file from the tree to preview it. Editing stays in Git.",

@@ -22,6 +22,59 @@ var knowledgeDownloadHTTPClient = &http.Client{Timeout: 5 * time.Minute}
 
 var errKnowledgeFileNotFound = errors.New("knowledge file not found")
 
+// knowledgeGitTokenSettingsKey is the workspace-settings field that holds a
+// per-workspace Git credential for knowledge browse. It is write-only: API and
+// daemon payloads strip it and report only whether one is set.
+const knowledgeGitTokenSettingsKey = "knowledge_git_token"
+
+type knowledgeTokenCtxKey struct{}
+
+func withKnowledgeToken(ctx context.Context, token string) context.Context {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, knowledgeTokenCtxKey{}, token)
+}
+
+func knowledgeTokenFromContext(ctx context.Context) string {
+	token, _ := ctx.Value(knowledgeTokenCtxKey{}).(string)
+	return strings.TrimSpace(token)
+}
+
+func knowledgeGitTokenFromSettings(raw []byte) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return ""
+	}
+	token, _ := settings[knowledgeGitTokenSettingsKey].(string)
+	return strings.TrimSpace(token)
+}
+
+// redactKnowledgeGitTokenJSON removes the credential before settings leave the
+// process. Non-object settings are returned unchanged.
+func redactKnowledgeGitTokenJSON(raw []byte) []byte {
+	if len(raw) == 0 {
+		return raw
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return raw
+	}
+	if _, ok := settings[knowledgeGitTokenSettingsKey]; !ok {
+		return raw
+	}
+	delete(settings, knowledgeGitTokenSettingsKey)
+	out, err := json.Marshal(settings)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
 type gitRemote struct {
 	Host     string
 	Owner    string
@@ -406,9 +459,17 @@ func knowledgeGETWith(ctx context.Context, client *http.Client, apiURL, provider
 	if accept != "" {
 		req.Header.Set("Accept", accept)
 	}
+	token := knowledgeTokenFromContext(ctx)
+	if token == "" && provider != "github" {
+		token = strings.TrimSpace(os.Getenv("KNOWLEDGE_GIT_TOKEN"))
+	}
 	if provider == "github" {
-		addGitHubAuthHeader(req)
-	} else if token := strings.TrimSpace(os.Getenv("KNOWLEDGE_GIT_TOKEN")); token != "" {
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		} else {
+			addGitHubAuthHeader(req)
+		}
+	} else if token != "" {
 		if provider == "gitlab" {
 			req.Header.Set("PRIVATE-TOKEN", token)
 		} else {
