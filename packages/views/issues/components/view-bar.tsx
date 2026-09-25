@@ -92,6 +92,30 @@ const RESERVE_MENU = 36;
 const RESERVE_MORE = RESERVE_MENU + 32;
 const RESERVE_PROMOTED = RESERVE_MENU + 200;
 
+export type ReserveTier = "menu" | "more" | "promoted";
+
+const RESERVE_TIER_RANK: Record<ReserveTier, number> = {
+  menu: 0,
+  more: 1,
+  promoted: 2,
+};
+
+/** The reserve only grows. Shrinking it when the wider chrome makes a tab
+ *  fit again bounces the row between tiers and overflows React's update
+ *  limit. A new visible set starts over at "menu" (see the render reset). */
+export function raiseReserveTier(
+  current: ReserveTier,
+  activeOverflowed: boolean,
+  overflowCount: number,
+): ReserveTier {
+  const next: ReserveTier = activeOverflowed
+    ? "promoted"
+    : overflowCount > 0
+      ? "more"
+      : "menu";
+  return RESERVE_TIER_RANK[next] > RESERVE_TIER_RANK[current] ? next : current;
+}
+
 /** One bar tab: sortable in place; suppresses the click that ends a drag. */
 function SortableBarTab({
   id,
@@ -273,14 +297,17 @@ export function ViewBar({
   );
 
   // --- single-row fit -----------------------------------------------------
-  // The reserve feeds back into the fit, but only ever grows when items
-  // fall out (the "more" trigger appears, then the promoted active tab
-  // widens it), which shrinks the fit further and keeps them out — the
-  // settle is monotonic in both directions.
+  // The reserve feeds back into the fit. It only grows while this visible
+  // set is on screen: a wider trigger keeps the overflowed tabs out, so the
+  // tier cannot bounce back to a narrower reserve and retrigger layout.
   const activeBarId = activeView ? `view:${activeView.id}` : null;
-  const [reserveTier, setReserveTier] = useState<"menu" | "more" | "promoted">(
-    "menu",
-  );
+  const visibleKey = visible.map((item) => item.barItemId).join("\0");
+  const [reserveTier, setReserveTier] = useState<ReserveTier>("menu");
+  const [reserveKey, setReserveKey] = useState(visibleKey);
+  if (reserveKey !== visibleKey) {
+    setReserveKey(visibleKey);
+    setReserveTier("menu");
+  }
   const { containerRef, measureRef, fitCount } = useSingleRowFit({
     count: visible.length,
     gap: 4,
@@ -296,8 +323,8 @@ export function ViewBar({
   const activeOverflowed =
     !!activeBarId && overflowed.some((item) => item.barItemId === activeBarId);
   useEffect(() => {
-    setReserveTier(
-      activeOverflowed ? "promoted" : overflowed.length > 0 ? "more" : "menu",
+    setReserveTier((current) =>
+      raiseReserveTier(current, activeOverflowed, overflowed.length),
     );
   }, [activeOverflowed, overflowed.length]);
   const promoted = reserveTier === "promoted" && activeOverflowed;
