@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getPreferences: vi.fn(),
   setAutomaticUpdates: vi.fn(),
   checkForUpdates: vi.fn(),
+  installUpdate: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
 }));
@@ -60,6 +61,7 @@ describe("UpdatesSettingsTab", () => {
     });
     mocks.setAutomaticUpdates.mockReset();
     mocks.checkForUpdates.mockReset();
+    mocks.installUpdate.mockReset().mockResolvedValue(undefined);
     mocks.toastSuccess.mockReset();
     mocks.toastError.mockReset();
 
@@ -73,6 +75,12 @@ describe("UpdatesSettingsTab", () => {
         getPreferences: mocks.getPreferences,
         setAutomaticUpdates: mocks.setAutomaticUpdates,
         checkForUpdates: mocks.checkForUpdates,
+        // The tab subscribes to the auto-updater's own events so a downloaded
+        // release can be installed from here; the test only exercises the
+        // preference switch, so the subscriptions are inert.
+        onUpdateAvailable: () => vi.fn(),
+        onUpdateDownloaded: () => vi.fn(),
+        installUpdate: mocks.installUpdate,
       },
     });
   });
