@@ -81,6 +81,8 @@ const WORKSPACE_ROUTES: readonly RoutePattern[] = [
   ["skills", ":id"],
   ["settings"],
   ["attachments", ":id", "preview"],
+  // KB-HOOK: workspace knowledge base browser.
+  ["knowledge"],
 ];
 
 const GLOBAL_ROUTES: readonly RoutePattern[] = [
