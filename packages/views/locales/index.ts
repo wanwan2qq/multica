@@ -128,6 +128,7 @@ import frUsage from "./fr/usage.json";
 import frUi from "./fr/ui.json";
 import frSquads from "./fr/squads.json";
 import frBilling from "./fr/billing.json";
+import frKnowledge from "./fr/knowledge.json";
 
 // Single source of truth for the resource bundle. Both apps (web layout +
 // desktop App.tsx) import from here so adding a locale or namespace happens
@@ -271,5 +272,6 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: frUi,
     squads: frSquads,
     billing: frBilling,
+    knowledge: frKnowledge,
   },
 };

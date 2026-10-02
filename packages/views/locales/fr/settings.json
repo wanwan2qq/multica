@@ -1218,7 +1218,16 @@
     "url_label": "URL du dépôt",
     "description_label": "Description",
     "duplicate": "Ce dépôt est déjà ajouté.",
-    "actions_aria": "Actions pour {{url}}"
+    "actions_aria": "Actions pour {{url}}",
+    "knowledge_token_title": "Jeton d'accès à la base de connaissances",
+    "knowledge_token_description": "Les dépôts de connaissances privés utilisent un jeton enregistré pour cet espace de travail. Le jeton reste sur le serveur et n'est plus jamais affiché. S'il est vide, le serveur utilise KNOWLEDGE_GIT_TOKEN.",
+    "knowledge_token_placeholder": "Coller un jeton d'accès GitLab ou Gitea",
+    "knowledge_token_configured": "Un jeton est enregistré. Saisir une nouvelle valeur le remplace.",
+    "knowledge_token_save": "Enregistrer le jeton",
+    "knowledge_token_clear": "Effacer le jeton",
+    "knowledge_token_saved": "Jeton d'accès aux connaissances enregistré",
+    "knowledge_token_cleared": "Jeton d'accès aux connaissances effacé",
+    "knowledge_token_save_failed": "Impossible d'enregistrer le jeton d'accès aux connaissances"
   },
   "desktop": {
     "tabs": {
@@ -1235,7 +1244,24 @@
       "up_to_date": "Vous avez la dernière version.",
       "downloading": "La v{{version}} se télécharge en arrière-plan — vous serez averti quand elle sera prête à installer.",
       "check_now": "Vérifier maintenant",
-      "checking": "Vérification…"
+      "checking": "Vérification…",
+      "ready_to_install": "v{{version}} est prête — redémarrez pour l'installer.",
+      "restart_failed": "Impossible de redémarrer pour installer la mise à jour. Réessayez ou quittez puis rouvrez Multica.",
+      "restart_now": "Redémarrer maintenant",
+      "restarting": "Redémarrage…"
+    },
+    "server_switcher": {
+      "title": "Serveur",
+      "current": "Serveur : {{host}}",
+      "add_new": "Ajouter un serveur",
+      "api_url": "Adresse de l'API",
+      "web_url": "Adresse web",
+      "label_optional": "Nom (facultatif)",
+      "save_restart": "Enregistrer et redémarrer",
+      "switching": "Redémarrage…",
+      "remove": "Supprimer",
+      "cancel": "Annuler",
+      "error_invalid": "Impossible d'utiliser cette adresse. Vérifiez les deux URL et réessayez."
     },
     "daemon": {
       "title": "Démon",
