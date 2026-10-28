@@ -42,7 +42,6 @@ const ctx = vi.hoisted(() => {
     squirrelAutoUpdater,
     appRemoveAllListeners: vi.fn(),
     appExit: vi.fn(),
-    appOn: vi.fn(),
     getAllWindows: vi.fn(
       () =>
         [] as Array<{
@@ -92,7 +91,6 @@ vi.mock("electron", () => ({
     quit: ctx.appQuit,
     removeAllListeners: ctx.appRemoveAllListeners,
     exit: ctx.appExit,
-    on: ctx.appOn,
     isPackaged: true,
   },
   autoUpdater: ctx.squirrelAutoUpdater,
@@ -114,7 +112,6 @@ import {
   type UpdaterDaemonGate,
 } from "./updater";
 import { updaterPreferencesPath } from "./updater-preferences";
-import { autoUpdater } from "electron-updater";
 
 describe("fork kb release line", () => {
   it("follows GitHub /releases/latest instead of isolating -kbN prerelease channels", () => {
@@ -453,7 +450,10 @@ describe("Windows update installation", () => {
       expect(gate.prepare).not.toHaveBeenCalled();
     }
     expect(ctx.quitAndInstall).toHaveBeenCalledTimes(2);
-    expect(ctx.appHandlers.get("before-quit")).toBeUndefined();
+    // The fork's darwin install-on-quit hook registers its own before-quit
+    // handler, so a handler exists here; what must hold is that quitting is
+    // never gated behind the daemon outside Windows.
+    expect(emitApp("before-quit").preventDefault).not.toHaveBeenCalled();
   });
 
   it.each(["ready", "timeout", "error"])("installs after preparation returns %s", async (result) => {

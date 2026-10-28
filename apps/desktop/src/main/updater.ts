@@ -23,9 +23,6 @@ import { tryScheduleDarwinPostQuitInstallFromApp } from "./updater-install-darwi
 // as `update-available` fires; we only surface UI when the package is fully
 // downloaded and ready to install on next quit.
 autoUpdater.autoDownload = true;
-// macOS fork builds install from the cached update.zip after quit (see
-// updater-install-darwin.ts). Squirrel/ShipIt is unreliable when adhoc-signed.
-autoUpdater.autoInstallOnAppQuit = process.platform !== "darwin";
 
 // Windows arm64 ships its own update metadata channel because
 // electron-builder's `latest.yml` is not arch-suffixed on Windows — both
@@ -234,6 +231,12 @@ export function setupAutoUpdater(
   options: SetupAutoUpdaterOptions = {},
 ): void {
   const platform = options.platform ?? process.platform;
+  // macOS fork builds install from the cached update.zip after quit (see
+  // updater-install-darwin.ts). Squirrel/ShipIt is unreliable when adhoc-signed,
+  // so electron-updater must not try to install on quit there. Resolved from the
+  // injected platform rather than at import time so the install paths stay
+  // testable on any host.
+  autoUpdater.autoInstallOnAppQuit = platform !== "darwin";
   // Only Windows locks a running executable against replacement; macOS and
   // Linux keep their existing update path untouched.
   const daemonGate = platform === "win32" ? (options.daemonGate ?? null) : null;
@@ -400,7 +403,7 @@ export function setupAutoUpdater(
   // zip once the process exits (Squirrel/ShipIt is skipped — see autoInstallOnAppQuit).
   app.on("before-quit", () => {
     if (!updateReadyToInstall || updateInstallInProgress) return;
-    if (scheduleDarwinInstallOnQuit()) {
+    if (scheduleDarwinInstallOnQuit(platform)) {
       updateInstallInProgress = true;
       updateReadyToInstall = false;
     }
