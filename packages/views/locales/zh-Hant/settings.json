@@ -1214,7 +1214,16 @@
     "url_label": "倉庫 URL",
     "description_label": "描述",
     "duplicate": "這個倉庫已經新增過了。",
-    "actions_aria": "{{url}} 的操作"
+    "actions_aria": "{{url}} 的操作",
+    "knowledge_token_title": "知識庫存取令牌",
+    "knowledge_token_description": "私有知識庫按工作區單獨設定。令牌只儲存在伺服器上，儲存後不會回顯。未填寫時仍使用伺服器的 KNOWLEDGE_GIT_TOKEN。",
+    "knowledge_token_configured": "已設定。輸入新令牌會替換目前的值。",
+    "knowledge_token_placeholder": "貼上 GitLab 或 Gitea 存取令牌",
+    "knowledge_token_save": "儲存令牌",
+    "knowledge_token_saved": "已儲存知識庫存取令牌",
+    "knowledge_token_save_failed": "儲存知識庫存取令牌失敗",
+    "knowledge_token_clear": "清除令牌",
+    "knowledge_token_cleared": "已清除知識庫存取令牌"
   },
   "desktop": {
     "tabs": {
@@ -1240,7 +1249,24 @@
       "up_to_date": "已是最新版本。",
       "downloading": "v{{version}} 正在後臺下載——準備好安裝時會通知你。",
       "check_now": "立即檢查",
-      "checking": "檢查中..."
+      "checking": "檢查中...",
+      "ready_to_install": "v{{version}} 已下載完成，重新啟動後生效。",
+      "restart_now": "立即重新啟動",
+      "restarting": "正在重新啟動…",
+      "restart_failed": "無法重新啟動安裝更新，請重試或結束後重新開啟 Multica。"
+    },
+    "server_switcher": {
+      "title": "伺服器",
+      "current": "伺服器：{{host}}",
+      "add_new": "新增伺服器",
+      "api_url": "API 位址",
+      "web_url": "Web 位址",
+      "label_optional": "備註（選填）",
+      "save_restart": "儲存並重新啟動",
+      "switching": "正在重新啟動…",
+      "remove": "刪除",
+      "cancel": "取消",
+      "error_invalid": "無法使用該位址，請檢查兩個位址後重試。"
     },
     "daemon": {
       "title": "守護程序",

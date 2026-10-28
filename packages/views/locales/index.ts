@@ -68,6 +68,7 @@ import zhHantWorkspace from "./zh-Hant/workspace.json";
 import zhHantProjects from "./zh-Hant/projects.json";
 import zhHantAutopilots from "./zh-Hant/autopilots.json";
 import zhHantSkills from "./zh-Hant/skills.json";
+import zhHantKnowledge from "./zh-Hant/knowledge.json";
 import zhHantChat from "./zh-Hant/chat.json";
 import zhHantModals from "./zh-Hant/modals.json";
 import zhHantRuntimes from "./zh-Hant/runtimes.json";
@@ -233,6 +234,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     projects: zhHantProjects,
     autopilots: zhHantAutopilots,
     skills: zhHantSkills,
+    knowledge: zhHantKnowledge,
     chat: zhHantChat,
     modals: zhHantModals,
     runtimes: zhHantRuntimes,
