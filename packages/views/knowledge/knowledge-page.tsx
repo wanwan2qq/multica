@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import { useDefaultLayout } from "react-resizable-panels";
 import { AlertCircle, ChevronRight, Copy, Download, ExternalLink, FileQuestion, Library, Maximize2, Minimize2, RefreshCw } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { errorCode } from "@multica/core/api";
+import { api, errorCode } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
 import {
   isEditableShortcutTarget,
@@ -46,11 +46,19 @@ import { useSidebarSafe } from "@multica/ui/components/ui/sidebar";
 import { cn } from "@multica/ui/lib/utils";
 import { AppLink, useNavigation } from "../navigation";
 import { useRestoredScrollEntry } from "../platform";
+import { useHtmlPreviewScrollRestore } from "../attachments/use-html-preview-scroll-restore";
 import { CollectionPageHeader, CollectionPageState } from "../layout/collection-page";
 import { shouldIgnoreGlobalShortcutEvent } from "../layout/global-shortcuts";
 import { RichContent } from "../rich-content";
 import { useT } from "../i18n";
+import {
+  knowledgeAssetURL,
+  knowledgeAssetsBaseHref,
+  resolveAssetsBase,
+  resolveKnowledgeRelativePath,
+} from "./asset-urls";
 import { BranchPicker } from "./branch-picker";
+import { injectKnowledgeBase } from "./html-base";
 import { KnowledgeDirectoryListing } from "./knowledge-directory-listing";
 import { KnowledgeBrowsePrefs, KnowledgeTree } from "./knowledge-tree";
 import { readingWidthClass } from "./reading-width";
@@ -422,6 +430,10 @@ export function KnowledgePage() {
             content={fileQuery.data?.content ?? ""}
             truncated={fileQuery.data?.truncated === true}
             browseURL={fileQuery.data?.browse_url ?? browseURL}
+            assetsBase={resolveAssetsBase(
+              api.getBaseUrl?.(),
+              fileQuery.data?.assets_base,
+            )}
             fullscreen={fullscreen}
           />
         )}
@@ -699,7 +711,18 @@ function KnowledgeBreadcrumb({
   );
 }
 
-function HtmlPreview({ content, title }: { content: string; title: string }) {
+function HtmlPreview({
+  content,
+  title,
+  baseHref,
+  resolveRelativeBase,
+}: {
+  content: string;
+  title: string;
+  baseHref: string;
+  /** Re-target a `<base href>` the document already declares, when relative. */
+  resolveRelativeBase: (href: string) => string | null;
+}) {
   // An HTML document gets the reader's pane as its window, the way a browser
   // tab does — nothing about it is measured from the document's own content.
   // These documents are written against the viewport: `height: 100vh` slide
@@ -711,9 +734,20 @@ function HtmlPreview({ content, title }: { content: string; title: string }) {
   // below the file bar, so it stays right through a full-screen toggle, a
   // dragged divider, and the window itself. A document taller than the pane
   // scrolls inside the frame, as it would in a tab.
+  //
+  // Because that scrolling belongs to the frame's own document, the tab
+  // coordinator cannot read the offset the way it reads the reader pane's, and
+  // returning to the tab would land back at the top. The shared HTML preview
+  // bridge reports the frame's position over postMessage and restores it once
+  // the document is ready (same mechanism as the attachment preview).
+  const { contentKey, buildSrcDoc, iframeRef, onLoad } =
+    useHtmlPreviewScrollRestore(content);
   return (
     <iframe
-      srcDoc={content}
+      key={contentKey}
+      ref={iframeRef}
+      onLoad={onLoad}
+      srcDoc={injectKnowledgeBase(buildSrcDoc(content), baseHref, resolveRelativeBase)}
       title={title}
       className="h-full w-full border-0 bg-background"
     />
@@ -726,6 +760,7 @@ function KnowledgeFileBody({
   content,
   truncated,
   browseURL,
+  assetsBase,
   fullscreen = false,
 }: {
   currentPath: string;
@@ -733,18 +768,28 @@ function KnowledgeFileBody({
   content: string;
   truncated: boolean;
   browseURL: string;
+  /** Site-relative (or absolute) asset prefix; empty when the server has none. */
+  assetsBase: string;
   /** Widen for the full-screen reader (see `readingWidthClass`). */
   fullscreen?: boolean;
 }) {
   const { t } = useT("knowledge");
 
-  // Resolve relative links in markdown to knowledge-page URLs
+  // Resolve relative links in markdown to knowledge-page URLs, and relative
+  // images to the capability route that serves them.
   const resolvedContent = useMemo(
-    () => (media === "markdown" ? resolveKnowledgeLinks(content, currentPath) : content),
-    [media, content, currentPath],
+    () =>
+      media === "markdown"
+        ? resolveKnowledgeLinks(content, currentPath, assetsBase)
+        : content,
+    [media, content, currentPath, assetsBase],
   );
 
-  if (media === "binary") {
+  const imageURL = media === "image" ? knowledgeAssetURL(assetsBase, currentPath) : "";
+
+  // An image without an assets base means the server predates the capability
+  // route; fall back to the same "can't preview" state as any other binary.
+  if (media === "binary" || (media === "image" && !imageURL)) {
     return (
       <CollectionPageState
         icon={FileQuestion}
@@ -771,7 +816,9 @@ function KnowledgeFileBody({
 
   return (
     <div className="h-full">
-      {truncated ? (
+      {/* An image is served whole by the asset route, so the preview fetch's
+          256 KiB cap says nothing about what is on screen. */}
+      {truncated && media !== "image" ? (
         <p className="border-b border-surface-border px-6 py-2 text-caption text-muted-foreground">
           {t(($) => $.page.truncated)}
         </p>
@@ -781,7 +828,27 @@ function KnowledgeFileBody({
           <RichContent content={resolvedContent} density="document" phase="settled" />
         </div>
       ) : media === "html" ? (
-        <HtmlPreview content={resolvedContent} title={currentPath} />
+        <HtmlPreview
+          content={resolvedContent}
+          title={currentPath}
+          baseHref={knowledgeAssetsBaseHref(assetsBase, currentPath)}
+          resolveRelativeBase={(href) => {
+            const url = knowledgeAssetURL(
+              assetsBase,
+              resolveKnowledgeRelativePath(currentPath, href),
+            );
+            if (!url) return null;
+            return href.endsWith("/") ? `${url}/` : url;
+          }}
+        />
+      ) : media === "image" && imageURL ? (
+        <div className="flex h-full items-center justify-center overflow-auto p-6">
+          <img
+            src={imageURL}
+            alt={currentPath}
+            className="max-h-full max-w-full rounded-lg object-contain shadow-[0_0_0_1px_var(--border)]"
+          />
+        </div>
       ) : (
         <pre
           className={cn(

@@ -14,6 +14,12 @@ import enSkills from "../locales/en/skills.json";
 import { useTreeExpandStore } from "@multica/core/knowledge/stores/tree-expand-store";
 import { useKnowledgePathStore } from "@multica/core/knowledge/stores/knowledge-path-store";
 import { NavigationProvider, type NavigationAdapter } from "../navigation";
+import {
+  ScrollRestorationProvider,
+  type ExternalScrollSource,
+  type ScrollRestorationAdapter,
+} from "../platform";
+import { HTML_IFRAME_SCROLL_KEY } from "../attachments/use-html-preview-scroll-restore";
 import { KnowledgePage } from "./knowledge-page";
 
 // react-resizable-panels relies on layout-side observers (`mountGroup` exercises
@@ -71,11 +77,12 @@ const refByWsRef = vi.hoisted(() => ({ current: {} as Record<string, string> }))
 const invalidateQueries = vi.hoisted(() => vi.fn());
 
 const downloadKnowledgeFile = vi.hoisted(() => vi.fn());
+const getBaseUrl = vi.hoisted(() => vi.fn(() => ""));
 vi.mock("@multica/core/api", async (importOriginal) => ({
   // ApiError stays real: the tests below build a knowledge_repo_not_configured
   // instance from it, and only the network surface is replaced.
   ...(await importOriginal<typeof import("@multica/core/api")>()),
-  api: { downloadKnowledgeFile },
+  api: { downloadKnowledgeFile, getBaseUrl },
 }));
 
 vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-1" }));
@@ -148,17 +155,24 @@ function navigationAdapter(): NavigationAdapter {
   };
 }
 
-function renderPage() {
+function renderPage(adapter?: ScrollRestorationAdapter) {
   const nav = navigationAdapter();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const page = (
     <I18nProvider locale="en" resources={TEST_RESOURCES}>
       <QueryClientProvider client={client}>
         <NavigationProvider value={nav}>
           <KnowledgePage />
         </NavigationProvider>
       </QueryClientProvider>
-    </I18nProvider>,
+    </I18nProvider>
+  );
+  return render(
+    adapter ? (
+      <ScrollRestorationProvider adapter={adapter}>{page}</ScrollRestorationProvider>
+    ) : (
+      page
+    ),
   );
 }
 
@@ -220,15 +234,23 @@ describe("KnowledgePage", () => {
 
   // The same fixture with an HTML body, which the page renders in an iframe
   // rather than through the rich-content reader.
-  function openHtmlFile(filePath = "page.html") {
-    openMarkdownFile(filePath);
+  function openHtmlFile(filePath = "page.html", assetsBase = "") {
+    openMarkdownFile(filePath, assetsBase);
     const data = fileRef.current.data as { [key: string]: unknown };
     fileRef.current.data = { ...data, media: "html", content: "<p>Hello HTML</p>" };
   }
 
+  // An image file: the reader renders it through the asset route, so it carries
+  // no inline content and no truncation banner.
+  function openImageFile(filePath = "img/logo.png", assetsBase = "/api/ws/token/") {
+    openMarkdownFile(filePath, assetsBase);
+    const data = fileRef.current.data as { [key: string]: unknown };
+    fileRef.current.data = { ...data, media: "image", content: "", size: 2048 };
+  }
+
   // A rendered markdown file plus the tree entry that resolves it, so a test
   // can get to the breadcrumb without restating the whole fixture.
-  function openMarkdownFile(filePath = "README.md") {
+  function openMarkdownFile(filePath = "README.md", assetsBase = "") {
     searchRef.current = new URLSearchParams(`path=${filePath}`);
     branchesRef.current = {
       isPending: false,
@@ -263,6 +285,7 @@ describe("KnowledgePage", () => {
         truncated: false,
         size: 8,
         content: "# Hello KB",
+        assets_base: assetsBase,
       },
       error: null,
     };
@@ -492,6 +515,85 @@ describe("KnowledgePage", () => {
     expect(iframe?.getAttribute("srcDoc")).toContain("Hello HTML");
     expect(screen.queryByText(/HTML preview is sandboxed/)).toBeNull();
     expect(screen.queryByText(/沙箱/)).toBeNull();
+  });
+
+  it("reports the html frame's own scroll to the tab coordinator", () => {
+    // The frame scrolls its own document, so the reader pane's offset is
+    // always 0 for an HTML file. Without the bridge the tab came back at the
+    // top while markdown kept its place.
+    const registered = new Map<string, ExternalScrollSource | null>();
+    const adapter: ScrollRestorationAdapter = {
+      get: () => undefined,
+      registerExternalSource: (key, source) => {
+        registered.set(key, source);
+      },
+    };
+    openHtmlFile();
+    renderPage(adapter);
+    const source = registered.get(HTML_IFRAME_SCROLL_KEY);
+    expect(source).toBeTruthy();
+    expect(typeof source?.capture).toBe("function");
+  });
+
+  it("does not register the iframe bridge for markdown files", () => {
+    const registered = new Map<string, ExternalScrollSource | null>();
+    const adapter: ScrollRestorationAdapter = {
+      get: () => undefined,
+      registerExternalSource: (key, source) => {
+        registered.set(key, source);
+      },
+    };
+    openMarkdownFile();
+    renderPage(adapter);
+    expect(registered.get(HTML_IFRAME_SCROLL_KEY)).toBeUndefined();
+  });
+
+  it("renders an image file through the asset route", () => {
+    openImageFile("docs/img/logo.png", "/api/ws/token/");
+    renderPage();
+    const img = document.querySelector("img");
+    expect(img).toBeTruthy();
+    expect(img?.getAttribute("src")).toBe("/api/ws/token/docs/img/logo.png");
+    expect(img?.getAttribute("alt")).toBe("docs/img/logo.png");
+    expect(screen.queryByText(/Can't preview this file/i)).toBeNull();
+  });
+
+  it("prefixes the asset route with the API base on desktop", () => {
+    getBaseUrl.mockReturnValue("http://10.15.42.27:8082");
+    openImageFile("logo.png", "/api/ws/token/");
+    renderPage();
+    expect(document.querySelector("img")?.getAttribute("src")).toBe(
+      "http://10.15.42.27:8082/api/ws/token/logo.png",
+    );
+    getBaseUrl.mockReturnValue("");
+  });
+
+  it("falls back to the no-preview state when the server sends no asset base", () => {
+    openImageFile("logo.png", "");
+    renderPage();
+    expect(document.querySelector("img")).toBeNull();
+    expect(screen.getByText(/Can't preview this file/i)).toBeTruthy();
+  });
+
+  it("gives an html document a base href for its relative assets", () => {
+    openHtmlFile("docs/page.html", "/api/ws/token/");
+    renderPage();
+    const iframe = document.querySelector("iframe") as HTMLIFrameElement;
+    expect(iframe.getAttribute("srcDoc")).toContain(
+      '<base href="/api/ws/token/docs/">',
+    );
+  });
+
+  it("leaves an html document that targets an absolute base alone", () => {
+    openHtmlFile("docs/page.html", "/api/ws/token/");
+    (fileRef.current.data as { content: string }).content =
+      '<!doctype html><head><base href="https://example.com/x/"></head>';
+    renderPage();
+    const doc = (document.querySelector("iframe") as HTMLIFrameElement).getAttribute(
+      "srcDoc",
+    );
+    expect(doc).toContain('<base href="https://example.com/x/">');
+    expect(doc).not.toContain('/api/ws/token/docs/"><');
   });
 
   it("keeps the file bar out of the scrolling region", () => {
