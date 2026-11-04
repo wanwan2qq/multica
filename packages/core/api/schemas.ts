@@ -3867,6 +3867,7 @@ export const KnowledgeFileResponseSchema = z.object({
   truncated: z.boolean().optional().default(false),
   size: z.number().optional().default(0),
   content: z.string().optional().default(""),
+  assets_base: z.string().optional().default(""),
 }).loose();
 
 export const EMPTY_KNOWLEDGE_FILE: KnowledgeFileResponse = {
@@ -3877,6 +3878,7 @@ export const EMPTY_KNOWLEDGE_FILE: KnowledgeFileResponse = {
   truncated: false,
   size: 0,
   content: "",
+  assets_base: "",
 };
 
 export const KnowledgeBranchesResponseSchema = z.object({

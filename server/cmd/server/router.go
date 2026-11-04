@@ -1501,6 +1501,18 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	// #6024).
 	r.Get("/api/avatars/{sig}/*", h.ServeAvatar)
 
+	// Knowledge base asset serving (KB-HOOK). Public for the same reason as the
+	// routes above: a desktop renderer runs on file:// with a bearer token and
+	// no API cookie, so a native <img>/<link> subresource carries no
+	// credentials; and an HTML preview resolves sibling files against a <base
+	// href>, which cannot carry a query signature. The token in the path is the
+	// credential — minted only by the authenticated GET /knowledge/file after
+	// its membership check, scoped to one workspace and ref, and expiring. The
+	// response forces attachment disposition for anything not displayable
+	// inline and sends Referrer-Policy: no-referrer so the token never leaks to
+	// a third-party subresource. See server/internal/handler/knowledge_assets.go.
+	r.Get("/api/workspaces/{id}/knowledge/assets/{token}/*", h.ServeKnowledgeAsset)
+
 	// Hosted plugin documents are capability-authenticated and intentionally
 	// outside the session middleware: the configured content origin must stay
 	// cookie-free. The encrypted path token binds the installation, immutable

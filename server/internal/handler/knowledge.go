@@ -10,10 +10,13 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/storage"
+	"github.com/multica-ai/multica/server/internal/util"
 )
 
 const knowledgeMaxFileBytes = 256 * 1024
@@ -46,6 +49,11 @@ type knowledgeFileResponse struct {
 	Truncated bool   `json:"truncated"`
 	Size      int    `json:"size"`
 	Content   string `json:"content"`
+	// AssetsBase is the site-relative prefix sibling files resolve against —
+	// the image in a markdown document, the `src` of an <img> in an HTML
+	// document. It carries a path-scoped capability token because native
+	// subresource loads cannot authenticate (see ServeKnowledgeAsset).
+	AssetsBase string `json:"assets_base"`
 }
 
 func pickKnowledgeRepo(repos []workspaceRepoRef) (workspaceRepoRef, bool) {
@@ -65,12 +73,20 @@ func isKnowledgeDescription(description string) bool {
 	return strings.Contains(description, "知识库") || strings.Contains(lower, "knowledge")
 }
 
-func (h *Handler) loadKnowledgeRepo(w http.ResponseWriter, r *http.Request) (workspaceRepoRef, gitRemote, string, bool) {
+func (h *Handler) loadKnowledgeRepo(w http.ResponseWriter, r *http.Request) (pgtype.UUID, workspaceRepoRef, gitRemote, string, bool) {
 	workspaceID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "id"), "workspace_id")
 	if !ok {
-		return workspaceRepoRef{}, gitRemote{}, "", false
+		return pgtype.UUID{}, workspaceRepoRef{}, gitRemote{}, "", false
 	}
-	ws, err := h.Queries.GetWorkspace(r.Context(), workspaceID)
+	repo, remote, token, ok := h.loadKnowledgeRepoForWorkspace(r.Context(), w, workspaceID)
+	return workspaceID, repo, remote, token, ok
+}
+
+// loadKnowledgeRepoForWorkspace resolves the knowledge repository of one
+// workspace. The capability route calls it after its own authorization, so it
+// takes the ID directly instead of re-reading the URL.
+func (h *Handler) loadKnowledgeRepoForWorkspace(ctx context.Context, w http.ResponseWriter, workspaceID pgtype.UUID) (workspaceRepoRef, gitRemote, string, bool) {
+	ws, err := h.Queries.GetWorkspace(ctx, workspaceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "workspace not found")
 		return workspaceRepoRef{}, gitRemote{}, "", false
@@ -96,7 +112,7 @@ func (h *Handler) loadKnowledgeRepo(w http.ResponseWriter, r *http.Request) (wor
 }
 
 func (h *Handler) GetKnowledgeTree(w http.ResponseWriter, r *http.Request) {
-	repo, remote, token, ok := h.loadKnowledgeRepo(w, r)
+	_, repo, remote, token, ok := h.loadKnowledgeRepo(w, r)
 	if !ok {
 		return
 	}
@@ -125,14 +141,38 @@ func (h *Handler) GetKnowledgeTree(w http.ResponseWriter, r *http.Request) {
 // accepts untrusted input, and it is the one that has to hold for every
 // provider.
 func knowledgePathParam(w http.ResponseWriter, r *http.Request) (string, bool) {
-	filePath := strings.TrimSpace(r.URL.Query().Get("path"))
-	if filePath == "" {
+	if strings.TrimSpace(r.URL.Query().Get("path")) == "" {
 		writeError(w, http.StatusBadRequest, "path is required")
 		return "", false
 	}
-	if path.IsAbs(filePath) || strings.Contains(filePath, "..") {
+	filePath, ok := validateKnowledgeRepoPath(r.URL.Query().Get("path"))
+	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid path")
 		return "", false
+	}
+	return filePath, true
+}
+
+// validateKnowledgeRepoPath is the single traversal gate for every knowledge
+// route, whether the path arrives as a query parameter or as a wildcard tail.
+// The Git host would reject a traversal on its own, but the reject belongs at
+// this boundary: it is the one that has to hold for every provider.
+//
+// ".." is rejected anywhere in the string (not just as a whole segment), which
+// also rules out names like "notes..md" — the same deliberate conservatism the
+// query-parameter route has always had.
+func validateKnowledgeRepoPath(filePath string) (string, bool) {
+	filePath = strings.TrimSpace(filePath)
+	if filePath == "" || path.IsAbs(filePath) {
+		return "", false
+	}
+	if strings.Contains(filePath, "..") || strings.ContainsRune(filePath, 0) || strings.Contains(filePath, `\`) {
+		return "", false
+	}
+	for _, segment := range strings.Split(filePath, "/") {
+		if segment == "" || segment == "." {
+			return "", false
+		}
 	}
 	return filePath, true
 }
@@ -160,7 +200,7 @@ func knowledgeRef(w http.ResponseWriter, r *http.Request, ctx context.Context, r
 // whole blob instead, so PDFs, images and oversized documents arrive intact
 // rather than as a truncated preview or a "can't preview this" notice.
 func (h *Handler) GetKnowledgeDownload(w http.ResponseWriter, r *http.Request) {
-	_, remote, token, ok := h.loadKnowledgeRepo(w, r)
+	_, _, remote, token, ok := h.loadKnowledgeRepo(w, r)
 	if !ok {
 		return
 	}
@@ -207,7 +247,7 @@ func knowledgeDownloadContentType(filePath string) string {
 }
 
 func (h *Handler) GetKnowledgeFile(w http.ResponseWriter, r *http.Request) {
-	_, remote, token, ok := h.loadKnowledgeRepo(w, r)
+	workspaceID, _, remote, token, ok := h.loadKnowledgeRepo(w, r)
 	if !ok {
 		return
 	}
@@ -239,13 +279,14 @@ func (h *Handler) GetKnowledgeFile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, knowledgeFileResponse{
-		Path:      filePath,
-		Ref:       ref,
-		BrowseURL: remote.browseFile(ref, filePath),
-		Media:     media,
-		Truncated: truncated,
-		Size:      len(body),
-		Content:   content,
+		Path:       filePath,
+		Ref:        ref,
+		BrowseURL:  remote.browseFile(ref, filePath),
+		Media:      media,
+		Truncated:  truncated,
+		Size:       len(body),
+		Content:    content,
+		AssetsBase: knowledgeAssetsBasePath(util.UUIDToString(workspaceID), ref, time.Now()),
 	})
 }
 
@@ -255,7 +296,7 @@ type knowledgeBranchesResponse struct {
 }
 
 func (h *Handler) GetKnowledgeBranches(w http.ResponseWriter, r *http.Request) {
-	_, remote, token, ok := h.loadKnowledgeRepo(w, r)
+	_, _, remote, token, ok := h.loadKnowledgeRepo(w, r)
 	if !ok {
 		return
 	}
@@ -283,7 +324,9 @@ func classifyKnowledgeMedia(filePath string, body []byte) string {
 		return "markdown"
 	case ".html", ".htm":
 		return "html"
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".woff", ".woff2":
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".ico", ".svg":
+		return "image"
+	case ".pdf", ".zip", ".woff", ".woff2":
 		return "binary"
 	}
 	if !utf8.Valid(body) {

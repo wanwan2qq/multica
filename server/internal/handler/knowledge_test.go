@@ -85,8 +85,17 @@ func TestClassifyKnowledgeMedia(t *testing.T) {
 	if got := classifyKnowledgeMedia("a.htm", []byte("<p>hi</p>")); got != "html" {
 		t.Fatalf("htm: %s", got)
 	}
-	if got := classifyKnowledgeMedia("a.png", []byte("xxxx")); got != "binary" {
-		t.Fatalf("png: %s", got)
+	// Images get their own media so the reader can render them instead of
+	// falling back to the "can't preview" state. .svg is included: it is only
+	// ever loaded through <img>, never as a document (the asset route forces an
+	// attachment disposition).
+	for _, name := range []string{"a.png", "a.jpg", "a.jpeg", "a.gif", "a.webp", "a.avif", "a.bmp", "a.ico", "a.svg", "A.PNG"} {
+		if got := classifyKnowledgeMedia(name, []byte("xxxx")); got != "image" {
+			t.Fatalf("%s: %s", name, got)
+		}
+	}
+	if got := classifyKnowledgeMedia("a.pdf", []byte("%PDF-1.7")); got != "binary" {
+		t.Fatalf("pdf: %s", got)
 	}
 }
 

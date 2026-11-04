@@ -2390,6 +2390,19 @@ describe("Knowledge schemas", () => {
     expect(parsed.truncated).toBe(false);
     expect(parsed.size).toBe(0);
     expect(parsed.content).toBe("# hi");
+    // A server that predates the asset capability sends no prefix, and the
+    // reader degrades to "can't preview" rather than building a broken URL.
+    expect(parsed.assets_base).toBe("");
+  });
+
+  it("keeps the assets base a newer server sends", () => {
+    const parsed = KnowledgeFileResponseSchema.parse({
+      path: "img/logo.png",
+      media: "image",
+      assets_base: "/api/workspaces/ws/knowledge/assets/token/",
+    });
+    expect(parsed.media).toBe("image");
+    expect(parsed.assets_base).toBe("/api/workspaces/ws/knowledge/assets/token/");
   });
 
   it("degrades a malformed file response via parseWithFallback", () => {
