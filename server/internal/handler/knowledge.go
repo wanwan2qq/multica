@@ -365,15 +365,7 @@ func (h *Handler) GetKnowledgeFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	media := classifyKnowledgeMedia(filePath, body)
-	content := ""
-	if media != "binary" {
-		content = string(body)
-		if !utf8.ValidString(content) {
-			media = "binary"
-			content = ""
-		}
-	}
+	media, content := knowledgeFilePreview(filePath, body)
 	writeJSON(w, http.StatusOK, knowledgeFileResponse{
 		Path:       filePath,
 		Ref:        ref,
@@ -411,6 +403,22 @@ func (h *Handler) GetKnowledgeBranches(w http.ResponseWriter, r *http.Request) {
 		Branches:      names,
 		DefaultBranch: def,
 	})
+}
+
+// knowledgeFilePreview decides what the file endpoint tells the reader.
+// Image bytes are not text: a PNG fails the UTF-8 check, and treating that as
+// "binary" is what makes the page show "can't preview" instead of loading the
+// file from the asset route. The bytes themselves stay off this JSON body.
+func knowledgeFilePreview(filePath string, body []byte) (media, content string) {
+	media = classifyKnowledgeMedia(filePath, body)
+	if media == "binary" || media == "image" {
+		return media, ""
+	}
+	content = string(body)
+	if !utf8.ValidString(content) {
+		return "binary", ""
+	}
+	return media, content
 }
 
 func classifyKnowledgeMedia(filePath string, body []byte) string {

@@ -159,6 +159,24 @@ func TestClassifyKnowledgeMedia(t *testing.T) {
 	}
 }
 
+func TestKnowledgeFilePreviewKeepsImageBytesAsImage(t *testing.T) {
+	png := []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0xff, 0xfe}
+	media, content := knowledgeFilePreview("images/logo.PNG", png)
+	if media != "image" || content != "" {
+		t.Fatalf("png preview = %q %q, want image with an empty body", media, content)
+	}
+
+	media, content = knowledgeFilePreview("docs/note.md", []byte("# 标题"))
+	if media != "markdown" || content != "# 标题" {
+		t.Fatalf("markdown preview = %q %q", media, content)
+	}
+
+	media, content = knowledgeFilePreview("data.bin", []byte{0xff, 0xfe})
+	if media != "binary" || content != "" {
+		t.Fatalf("binary preview = %q %q", media, content)
+	}
+}
+
 func TestFetchKnowledgeTreeAndFileHTTP(t *testing.T) {
 	prev := knowledgeHTTPClient
 	t.Cleanup(func() { knowledgeHTTPClient = prev })
