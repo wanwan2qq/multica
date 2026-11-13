@@ -18,6 +18,7 @@ func newRepoRegistryTestCmd(serverURL string) *cobra.Command {
 	cmd.Flags().String("profile", "", "")
 	cmd.Flags().StringArray("url", nil, "")
 	cmd.Flags().String("description", "", "")
+	cmd.Flags().Bool("knowledge", false, "")
 	cmd.Flags().String("output", "json", "")
 	_ = cmd.Flags().Set("server-url", serverURL)
 	_ = cmd.Flags().Set("workspace-id", "ws-1")
@@ -68,6 +69,41 @@ func TestRunRepoAddAppendsAndDedupes(t *testing.T) {
 	}
 	if patched[0].URL != "https://git.example.com/web.git" || patched[1].URL != "https://git.example.com/api.git" {
 		t.Fatalf("unexpected patched repos: %+v", patched)
+	}
+}
+
+func TestRunRepoAddPreservesAndSetsKnowledge(t *testing.T) {
+	initialRepos := []workspaceRepo{{URL: "https://git.example.com/kb.git", Knowledge: true}}
+	var patched []workspaceRepo
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/workspaces/ws-1":
+			json.NewEncoder(w).Encode(repoWorkspaceResponse{ID: "ws-1", Repos: initialRepos})
+		case r.Method == http.MethodPatch && r.URL.Path == "/api/workspaces/ws-1":
+			var body struct {
+				Repos []workspaceRepo `json:"repos"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode patch body: %v", err)
+			}
+			patched = body.Repos
+			json.NewEncoder(w).Encode(repoWorkspaceResponse{ID: "ws-1", Repos: body.Repos})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	cmd := newRepoRegistryTestCmd(srv.URL)
+	if err := cmd.Flags().Set("knowledge", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRepoAdd(cmd, []string{"https://git.example.com/docs.git"}); err != nil {
+		t.Fatalf("runRepoAdd: %v", err)
+	}
+	if len(patched) != 2 || !patched[0].Knowledge || !patched[1].Knowledge {
+		t.Fatalf("patched repos = %+v, want both knowledge sources", patched)
 	}
 }
 

@@ -69,6 +69,19 @@ const branchesRef = vi.hoisted(() => ({
     data: { branches: [] as string[], default_branch: "" },
   },
 }));
+const DEFAULT_SOURCE = "https://github.com/acme/kb.git";
+const sourcesRef = vi.hoisted(() => ({
+  current: {
+    isPending: false,
+    isError: false,
+    isSuccess: true,
+    isFetching: false,
+    data: {
+      sources: [{ url: "https://github.com/acme/kb.git", description: "Knowledge" }],
+    },
+    error: null as unknown,
+  },
+}));
 const seenKeys = vi.hoisted(() => ({ current: [] as unknown[][] }));
 const searchRef = vi.hoisted(() => ({ current: new URLSearchParams() }));
 const replace = vi.hoisted(() => vi.fn());
@@ -96,17 +109,23 @@ vi.mock("@multica/core/paths", async (importOriginal) => ({
 vi.mock("@multica/core/knowledge/queries", () => ({
   knowledgeKeys: {
     all: (wsId: string) => ["workspaces", wsId, "knowledge"] as const,
-    branches: (wsId: string) => ["workspaces", wsId, "knowledge", "branches"] as const,
-    tree: (wsId: string, ref: string) => ["workspaces", wsId, "knowledge", "tree", ref] as const,
-    file: (wsId: string, ref: string, path: string) =>
-      ["workspaces", wsId, "knowledge", "file", ref, path] as const,
+    sources: (wsId: string) => ["workspaces", wsId, "knowledge", "sources"] as const,
+    branches: (wsId: string, repoUrl: string) =>
+      ["workspaces", wsId, "knowledge", "branches", repoUrl] as const,
+    tree: (wsId: string, repoUrl: string, ref: string) =>
+      ["workspaces", wsId, "knowledge", "tree", repoUrl, ref] as const,
+    file: (wsId: string, repoUrl: string, ref: string, path: string) =>
+      ["workspaces", wsId, "knowledge", "file", repoUrl, ref, path] as const,
   },
-  knowledgeBranchesOptions: () => ({ queryKey: ["knowledge", "branches"] }),
-  knowledgeTreeOptions: (_wsId: string, ref: string) => ({
-    queryKey: ["knowledge", "tree", ref],
+  knowledgeSourcesOptions: (wsId: string) => ({ queryKey: ["knowledge", "sources", wsId] }),
+  knowledgeBranchesOptions: (_wsId: string, repoUrl: string) => ({
+    queryKey: ["knowledge", "branches", repoUrl],
   }),
-  knowledgeFileOptions: (_wsId: string, ref: string, _path: string) => ({
-    queryKey: ["knowledge", "file", ref, _path],
+  knowledgeTreeOptions: (_wsId: string, repoUrl: string, ref: string) => ({
+    queryKey: ["knowledge", "tree", repoUrl, ref],
+  }),
+  knowledgeFileOptions: (_wsId: string, repoUrl: string, ref: string, path: string) => ({
+    queryKey: ["knowledge", "file", repoUrl, ref, path],
   }),
 }));
 vi.mock("@multica/core/knowledge/stores/ref-store", () => ({
@@ -130,6 +149,7 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
     useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
       seenKeys.current.push([...queryKey]);
       const key = Array.isArray(queryKey) ? queryKey : [];
+      if (key.includes("sources")) return sourcesRef.current;
       if (key.includes("branches")) return branchesRef.current;
       if (key.includes("tree")) return treeRef.current;
       return fileRef.current;
@@ -202,6 +222,14 @@ describe("KnowledgePage", () => {
     searchRef.current = new URLSearchParams();
     seenKeys.current = [];
     refByWsRef.current = {};
+    sourcesRef.current = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      data: { sources: [{ url: DEFAULT_SOURCE, description: "Knowledge" }] },
+      error: null,
+    };
     globalThis.localStorage?.clear?.();
     useTreeExpandStore.setState({ expandedByWs: {} });
     useKnowledgePathStore.setState({ pathByWs: {} });
@@ -320,6 +348,7 @@ describe("KnowledgePage", () => {
         "ws-1",
         "guides/start.md",
         "main",
+        DEFAULT_SOURCE,
       );
       expect(createObjectURL).toHaveBeenCalledTimes(1);
       // The last click is the download's; Breadcrumb segments are <button>s and
@@ -637,6 +666,50 @@ describe("KnowledgePage", () => {
     // the cache. activeRef resolves to "main" because the user override is
     // empty and branchesQuery.data.default_branch === "main".
     expect(treeKey).toContain("main");
+  });
+
+  it("switches to another knowledge source and drops the open path", async () => {
+    sourcesRef.current = {
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      data: {
+        sources: [
+          { url: DEFAULT_SOURCE, description: "Product" },
+          { url: "https://github.com/acme/docs.git", description: "Docs" },
+        ],
+      },
+      error: null,
+    };
+    searchRef.current = new URLSearchParams("path=README.md");
+    branchesRef.current = {
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      data: { branches: ["main"], default_branch: "main" },
+    };
+    treeRef.current = {
+      isPending: false,
+      isError: false,
+      isFetching: false,
+      isSuccess: true,
+      data: {
+        repo_url: DEFAULT_SOURCE,
+        description: "Product",
+        ref: "main",
+        browse_url: "https://github.com/acme/kb/tree/main",
+        provider: "github",
+        entries: [{ path: "README.md", type: "blob" }],
+      },
+      error: null,
+    };
+    renderPage();
+    await userEvent.click(screen.getByLabelText("Knowledge source"));
+    await userEvent.click(screen.getByText("Docs"));
+    const target = String(replace.mock.calls.at(-1)?.[0] ?? "");
+    expect(target).toContain("repo=https%3A%2F%2Fgithub.com%2Facme%2Fdocs.git");
+    expect(target).not.toContain("path=");
   });
 
   it("renders a skeleton instead of stale tree data when activeRef does not match data.ref", () => {

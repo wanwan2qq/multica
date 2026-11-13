@@ -15,7 +15,7 @@ export interface KnowledgeFileDownload {
 
 // There is no optimistic path here: the file only exists once the Git host has
 // answered, so the button reports progress rather than predicting the outcome.
-export function useKnowledgeFileDownload(wsId: string): KnowledgeFileDownload {
+export function useKnowledgeFileDownload(wsId: string, repoUrl: string): KnowledgeFileDownload {
   const { t } = useT("knowledge");
   const [busy, setBusy] = useState(false);
 
@@ -24,7 +24,7 @@ export function useKnowledgeFileDownload(wsId: string): KnowledgeFileDownload {
       if (busy) return;
       setBusy(true);
       try {
-        const blob = await api.downloadKnowledgeFile(wsId, filePath, ref);
+        const blob = await api.downloadKnowledgeFile(wsId, filePath, ref, repoUrl);
         saveBlobAsFile(blob, knowledgeDownloadFilename(filePath));
       } catch {
         toast.error(t(($) => $.page.download_failed));
@@ -32,7 +32,7 @@ export function useKnowledgeFileDownload(wsId: string): KnowledgeFileDownload {
         setBusy(false);
       }
     },
-    [busy, t, wsId],
+    [busy, repoUrl, t, wsId],
   );
 
   return { download, busy };

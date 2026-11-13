@@ -19,7 +19,7 @@ func TestKnowledgeAssetTokenRoundTrip(t *testing.T) {
 	// neither can be re-split into different fields.
 	ref := "release/0.7|kb.1"
 
-	token := mintKnowledgeAssetToken(ws, ref, now)
+	token := mintKnowledgeAssetToken(ws, ref, "", now)
 	if token == "" {
 		t.Fatal("mintKnowledgeAssetToken returned an empty token")
 	}
@@ -45,7 +45,7 @@ func TestKnowledgeAssetTokenRoundTrip(t *testing.T) {
 
 func TestKnowledgeAssetTokenRejectsTampering(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
-	token := mintKnowledgeAssetToken("11112222-3333-4444-5555-666677778888", "main", now)
+	token := mintKnowledgeAssetToken("11112222-3333-4444-5555-666677778888", "main", "", now)
 	payload, sig, ok := strings.Cut(token, ".")
 	if !ok {
 		t.Fatalf("token %q has no signature separator", token)
@@ -56,14 +56,14 @@ func TestKnowledgeAssetTokenRejectsTampering(t *testing.T) {
 	))
 
 	cases := map[string]string{
-		"empty":          "",
-		"no separator":   payload,
-		"empty payload":  "." + sig,
-		"empty sig":      payload + ".",
+		"empty":            "",
+		"no separator":     payload,
+		"empty payload":    "." + sig,
+		"empty sig":        payload + ".",
 		"tampered payload": forgedPayload + "." + sig,
-		"tampered sig":   payload + "." + base64.RawURLEncoding.EncodeToString([]byte("not-the-signature")),
-		"unparsable sig": payload + ".!!!",
-		"unparsable body": "!!!." + sig,
+		"tampered sig":     payload + "." + base64.RawURLEncoding.EncodeToString([]byte("not-the-signature")),
+		"unparsable sig":   payload + ".!!!",
+		"unparsable body":  "!!!." + sig,
 	}
 	for name, candidate := range cases {
 		if _, ok := verifyKnowledgeAssetToken(candidate, now); ok {
@@ -89,7 +89,7 @@ func TestKnowledgeAssetTokenRejectsIncompleteClaims(t *testing.T) {
 
 func TestKnowledgeAssetsBasePath(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
-	base := knowledgeAssetsBasePath("11112222-3333-4444-5555-666677778888", "main", now)
+	base := knowledgeAssetsBasePath("11112222-3333-4444-5555-666677778888", "main", "", now)
 	if !strings.HasPrefix(base, "/api/workspaces/11112222-3333-4444-5555-666677778888/knowledge/assets/") {
 		t.Fatalf("base = %q, want the site-relative asset prefix", base)
 	}
@@ -124,9 +124,9 @@ func TestServeKnowledgeAssetRejectsBadToken(t *testing.T) {
 	}
 	workspaceID := "11112222-3333-4444-5555-666677778888"
 	now := time.Now()
-	expired := mintKnowledgeAssetToken(workspaceID, "main", now.Add(-knowledgeAssetTTL-time.Hour))
-	otherWorkspace := mintKnowledgeAssetToken("99992222-3333-4444-5555-666677778888", "main", now)
-	valid := mintKnowledgeAssetToken(workspaceID, "main", now)
+	expired := mintKnowledgeAssetToken(workspaceID, "main", "", now.Add(-knowledgeAssetTTL-time.Hour))
+	otherWorkspace := mintKnowledgeAssetToken("99992222-3333-4444-5555-666677778888", "main", "", now)
+	valid := mintKnowledgeAssetToken(workspaceID, "main", "", now)
 
 	for name, tc := range map[string]struct {
 		workspaceID string
@@ -150,7 +150,7 @@ func TestServeKnowledgeAssetRejectsUnsafePaths(t *testing.T) {
 		t.Skip("requires handler")
 	}
 	workspaceID := "11112222-3333-4444-5555-666677778888"
-	token := mintKnowledgeAssetToken(workspaceID, "main", time.Now())
+	token := mintKnowledgeAssetToken(workspaceID, "main", "", time.Now())
 
 	for name, assetPath := range map[string]string{
 		"parent":            "%2e%2e/secret.png",
@@ -186,7 +186,7 @@ func TestServeKnowledgeAssetServesImageInline(t *testing.T) {
 			"repos": testutil.Raw(`'[{"url":"https://github.com/acme/kb.git","description":"知识库"}]'::jsonb`),
 		},
 	)
-	token := mintKnowledgeAssetToken(workspaceID, "main", time.Now())
+	token := mintKnowledgeAssetToken(workspaceID, "main", "", time.Now())
 
 	w := serveAssetRequest(t, workspaceID, token, "images/logo.png")
 	if w.Code != http.StatusOK {
@@ -229,7 +229,7 @@ func TestServeKnowledgeAssetForcesAttachmentForDocuments(t *testing.T) {
 			"repos": testutil.Raw(`'[{"url":"https://github.com/acme/kb.git","description":"知识库"}]'::jsonb`),
 		},
 	)
-	token := mintKnowledgeAssetToken(workspaceID, "main", time.Now())
+	token := mintKnowledgeAssetToken(workspaceID, "main", "", time.Now())
 
 	for _, assetPath := range []string{"docs/page.html", "images/logo.svg"} {
 		w := serveAssetRequest(t, workspaceID, token, assetPath)
@@ -258,7 +258,7 @@ func TestServeKnowledgeAssetSupportsRange(t *testing.T) {
 			"repos": testutil.Raw(`'[{"url":"https://github.com/acme/kb.git","description":"知识库"}]'::jsonb`),
 		},
 	)
-	token := mintKnowledgeAssetToken(workspaceID, "main", time.Now())
+	token := mintKnowledgeAssetToken(workspaceID, "main", "", time.Now())
 
 	r := chi.NewRouter()
 	r.Get("/api/workspaces/{id}/knowledge/assets/{token}/*", testHandler.ServeKnowledgeAsset)

@@ -371,6 +371,11 @@ type UpdateWorkspaceRequest struct {
 type workspaceRepoRef struct {
 	URL         string `json:"url"`
 	Description string `json:"description,omitempty"`
+	// Knowledge marks a repository the workspace browses as a knowledge source.
+	// Several may be set; array order is the source order and the first is the
+	// default. When none are set, the knowledge browser keeps the legacy
+	// single-repo pick (description, or the only repo).
+	Knowledge bool `json:"knowledge,omitempty"`
 }
 
 func validateAndNormalizeWorkspaceRepos(value any) ([]byte, error) {

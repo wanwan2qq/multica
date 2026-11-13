@@ -94,7 +94,7 @@ import type {
   WebhookDelivery,
   WorkspaceMcpServer,
 } from "../types";
-import type { KnowledgeBranchesResponse, KnowledgeFileResponse, KnowledgeTreeResponse } from "../knowledge";
+import type { KnowledgeBranchesResponse, KnowledgeFileResponse, KnowledgeSourcesResponse, KnowledgeTreeResponse } from "../knowledge";
 import type { CloudRuntimeNode } from "../runtimes/cloud-runtime";
 import type { CreateFeedbackResponse } from "../feedback/types";
 
@@ -3879,6 +3879,19 @@ export const EMPTY_KNOWLEDGE_FILE: KnowledgeFileResponse = {
   size: 0,
   content: "",
   assets_base: "",
+};
+
+export const KnowledgeSourceSchema = z.object({
+  url: z.string(),
+  description: z.string().optional().default(""),
+}).loose();
+
+export const KnowledgeSourcesResponseSchema = z.object({
+  sources: z.array(KnowledgeSourceSchema).default([]),
+}).loose();
+
+export const EMPTY_KNOWLEDGE_SOURCES: KnowledgeSourcesResponse = {
+  sources: [],
 };
 
 export const KnowledgeBranchesResponseSchema = z.object({

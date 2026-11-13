@@ -69,8 +69,10 @@ import {
   // KB-HOOK: workspace knowledge base schemas
   EMPTY_KNOWLEDGE_TREE,
   EMPTY_KNOWLEDGE_FILE,
+  EMPTY_KNOWLEDGE_SOURCES,
   KnowledgeTreeResponseSchema,
   KnowledgeFileResponseSchema,
+  KnowledgeSourcesResponseSchema,
 } from "./schemas";
 import { IssueViewSchema, IssueViewListSchema } from "./schemas";
 import {
@@ -2403,6 +2405,18 @@ describe("Knowledge schemas", () => {
     });
     expect(parsed.media).toBe("image");
     expect(parsed.assets_base).toBe("/api/workspaces/ws/knowledge/assets/token/");
+  });
+
+  it("defaults a knowledge source list", () => {
+    const parsed = KnowledgeSourcesResponseSchema.parse({
+      sources: [{ url: "https://git.example/kb.git" }],
+    });
+    expect(parsed.sources).toEqual([{ url: "https://git.example/kb.git", description: "" }]);
+    expect(
+      parseWithFallback(null, KnowledgeSourcesResponseSchema, EMPTY_KNOWLEDGE_SOURCES, {
+        endpoint: "GET /api/workspaces/{id}/knowledge/sources",
+      }),
+    ).toEqual(EMPTY_KNOWLEDGE_SOURCES);
   });
 
   it("degrades a malformed file response via parseWithFallback", () => {

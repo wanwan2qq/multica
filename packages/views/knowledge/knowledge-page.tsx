@@ -13,6 +13,7 @@ import {
 import {
   defaultKnowledgePath,
   filterBrowsableKnowledgePaths,
+  knowledgeBrowseKey,
   knowledgePathAncestorDirs,
   pathHasDotPrefixedSegment,
   resolveKnowledgePath,
@@ -22,6 +23,7 @@ import {
   knowledgeBranchesOptions,
   knowledgeFileOptions,
   knowledgeKeys,
+  knowledgeSourcesOptions,
   knowledgeTreeOptions,
 } from "@multica/core/knowledge/queries";
 import { useDisplayPrefsStore } from "@multica/core/knowledge/stores/display-prefs-store";
@@ -58,6 +60,7 @@ import {
   resolveKnowledgeRelativePath,
 } from "./asset-urls";
 import { BranchPicker } from "./branch-picker";
+import { SourcePicker } from "./source-picker";
 import { injectKnowledgeBase } from "./html-base";
 import { KnowledgeDirectoryListing } from "./knowledge-directory-listing";
 import { KnowledgeBrowsePrefs, KnowledgeTree } from "./knowledge-tree";
@@ -77,6 +80,18 @@ export function KnowledgePage() {
   const queryClient = useQueryClient();
   const { pathname, searchParams, replace, push } = useNavigation();
   const pathParam = searchParams.get("path") ?? "";
+  const requestedRepo = (searchParams.get("repo") ?? "").trim();
+  const sourcesQuery = useQuery(knowledgeSourcesOptions(wsId));
+  const sources = sourcesQuery.data?.sources ?? [];
+  const matchedSource = sources.find((source) => source.url === requestedRepo);
+  const primaryRepo = sources[0]?.url ?? "";
+  const activeRepo = matchedSource?.url ?? (requestedRepo === "" ? primaryRepo : "");
+  const repoUnknown =
+    sourcesQuery.isSuccess && requestedRepo !== "" && matchedSource == null && sources.length > 0;
+  // The default source keeps the workspace key, so a previously remembered
+  // branch and file still apply. Other sources are stored apart.
+  const scopeKey =
+    activeRepo !== "" && activeRepo !== primaryRepo ? knowledgeBrowseKey(wsId, activeRepo) : wsId;
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: "multica_knowledge_layout",
   });
@@ -132,25 +147,26 @@ export function KnowledgePage() {
   // "fall back to whatever the server's default-branch endpoint returns".
   // The branch picker always re-keys off this value so the server response
   // can also refresh the picker after the page mounts.
-  const refFromStore = useRefStore((s) => s.refByWs[wsId] ?? "");
+  const refFromStore = useRefStore((s) => s.refByWs[scopeKey] ?? "");
   const hideDotPrefixed = useDisplayPrefsStore(
     (s) => s.hideDotPrefixedByWs[wsId] ?? false,
   );
   const setHideDotPrefixed = useDisplayPrefsStore((s) => s.setHideDotPrefixed);
-  const branchesQuery = useQuery(knowledgeBranchesOptions(wsId));
+  const branchesQuery = useQuery(knowledgeBranchesOptions(wsId, activeRepo));
   const defaultBranch = branchesQuery.data?.default_branch ?? "";
   const activeRef = refFromStore || defaultBranch;
 
-  const treeQuery = useQuery(knowledgeTreeOptions(wsId, activeRef));
+  const treeQuery = useQuery(knowledgeTreeOptions(wsId, activeRepo, activeRef));
 
   // Render-time ref guards: when the user switches branches, `activeRef`
   // flips and the new query starts, but `treeQuery.data` / `fileQuery.data`
   // still hold the *previous* ref's response until the new one lands. Treat
   // mismatched data as "not yet ready" so we render a skeleton instead of
   // stale content during the transition. (No data + error stays an error.)
-  const treeIsForCurrentRef = treeQuery.data?.ref === activeRef;
+  const treeIsForCurrentRef =
+    treeQuery.data?.ref === activeRef && (treeQuery.data?.repo_url ?? "") === activeRepo;
   const hasStaleTreeData = Boolean(treeQuery.data) && !treeIsForCurrentRef;
-  const showTreePending = treeQuery.isPending || hasStaleTreeData;
+  const showTreePending = activeRepo !== "" && (treeQuery.isPending || hasStaleTreeData);
   // A failed first load has no `data.ref`, so matching the active branch would
   // hide the error and paint the empty-tree state instead.
   const showTreeError =
@@ -184,7 +200,7 @@ export function KnowledgePage() {
   }, [allFiles, hideDotPrefixed, resolvedPath, visibleFiles]);
 
   const fileQuery = useQuery(
-    knowledgeFileOptions(wsId, activeRef, pathParam, {
+    knowledgeFileOptions(wsId, activeRepo, activeRef, pathParam, {
       enabled: resolvedPath?.kind === "file",
     }),
   );
@@ -211,8 +227,13 @@ export function KnowledgePage() {
   // across workspace/branch switches is the page's job via `key`, not the
   // input's.
   const [filter, setFilter] = useState("");
+  const [filterRepo, setFilterRepo] = useState(activeRepo);
+  if (filterRepo !== activeRepo) {
+    setFilterRepo(activeRepo);
+    setFilter("");
+  }
 
-  const { download, busy: downloadingFile } = useKnowledgeFileDownload(wsId);
+  const { download, busy: downloadingFile } = useKnowledgeFileDownload(wsId, activeRepo);
 
   // KB-HOOK: restore the reader's scroll position on return. The content pane
   // scrolls inside its own `overflow-y-auto` section, which the browser's
@@ -286,7 +307,7 @@ export function KnowledgePage() {
     // Re-entry through the sidebar (bare `/{slug}/knowledge`) or a refresh
     // can drop `?path=`. Restore the last file the user opened when it still
     // exists on this ref; otherwise fall back to the default overview.
-    const last = useKnowledgePathStore.getState().pathByWs[wsId];
+    const last = useKnowledgePathStore.getState().pathByWs[scopeKey];
     const lastResolved = last ? resolveKnowledgePath(last, allFiles) : null;
     const next =
       lastResolved && lastResolved.kind !== "missing"
@@ -296,22 +317,22 @@ export function KnowledgePage() {
     const params = new URLSearchParams(searchParams);
     params.set("path", next);
     replace(`${pathname}?${params.toString()}`);
-  }, [allFiles, pathParam, pathname, replace, searchParams, treeQuery.isSuccess, treeIsForCurrentRef, visibleFiles, wsId]);
+  }, [allFiles, pathParam, pathname, replace, scopeKey, searchParams, treeQuery.isSuccess, treeIsForCurrentRef, visibleFiles]);
 
   useEffect(() => {
     if (!resolvedPath || resolvedPath.kind === "missing" || !treeIsForCurrentRef) return;
     const ancestors = knowledgePathAncestorDirs(resolvedPath.path);
     if (ancestors.length === 0) return;
     const store = useTreeExpandStore.getState();
-    const current = store.expandedByWs[wsId] ?? [];
+    const current = store.expandedByWs[scopeKey] ?? [];
     const merged = [...new Set([...current, ...ancestors])];
     if (merged.length !== current.length) {
-      store.expandAll(wsId, merged);
+      store.expandAll(scopeKey, merged);
     }
-  }, [resolvedPath, treeIsForCurrentRef, wsId]);
+  }, [resolvedPath, scopeKey, treeIsForCurrentRef]);
 
   const selectPath = (next: string) => {
-    useKnowledgePathStore.getState().setPath(wsId, next);
+    useKnowledgePathStore.getState().setPath(scopeKey, next);
     const params = new URLSearchParams(searchParams);
     params.set("path", next);
     // Push so linked-doc browsing supports back/forward; branch changes and
@@ -326,17 +347,30 @@ export function KnowledgePage() {
   // if it still exists on the new ref, otherwise the new ref's overview.
   const handleBranchChange = useCallback(
     (next: string) => {
-      useRefStore.getState().setRef(wsId, next);
+      useRefStore.getState().setRef(scopeKey, next);
       if (pathParam.length > 0) {
         const params = new URLSearchParams(searchParams);
         params.delete("path");
         replace(`${pathname}?${params.toString()}`);
       }
     },
-    [wsId, pathname, searchParams, replace, pathParam],
+    [scopeKey, pathname, searchParams, replace, pathParam],
   );
 
-  const notConfigured = errorCode(treeQuery.error) === "knowledge_repo_not_configured";
+  const handleSourceChange = useCallback(
+    (next: string) => {
+      const params = new URLSearchParams(searchParams);
+      if (next === primaryRepo) params.delete("repo");
+      else params.set("repo", next);
+      params.delete("path");
+      replace(`${pathname}?${params.toString()}`);
+    },
+    [pathname, primaryRepo, replace, searchParams],
+  );
+
+  const notConfigured =
+    (sourcesQuery.isSuccess && sources.length === 0) ||
+    errorCode(treeQuery.error) === "knowledge_repo_not_configured";
   const reposHref = `${p.settings()}?tab=repositories`;
   const browseURL = pathParam
     ? (fileIsForCurrentRef && fileQuery.data?.browse_url) ||
@@ -467,8 +501,16 @@ export function KnowledgePage() {
                 <Maximize2 className="size-3.5" />
               )}
             </Button>
+            {sources.length > 1 ? (
+              <SourcePicker
+                sources={sources}
+                value={activeRepo}
+                onChange={handleSourceChange}
+              />
+            ) : null}
             <BranchPicker
               wsId={wsId}
+              repoUrl={activeRepo}
               value={refFromStore}
               onChange={handleBranchChange}
               disabled={!treeQuery.isSuccess && !branchesQuery.isSuccess}
@@ -501,7 +543,7 @@ export function KnowledgePage() {
         }
       />
 
-      {showInitialTreeLoad ? (
+      {sourcesQuery.isPending || showInitialTreeLoad ? (
         <div className="flex min-h-0 flex-1 md:flex-row">
           <div className="space-y-2 border-b border-surface-border p-4 md:w-72 md:border-b-0 md:border-r">
             <Skeleton className="h-6 w-40" />
@@ -513,6 +555,18 @@ export function KnowledgePage() {
             <Skeleton className="mt-4 h-40 w-full" />
           </div>
         </div>
+      ) : sourcesQuery.isError && sources.length === 0 ? (
+        <CollectionPageState
+          role="alert"
+          tone="destructive"
+          icon={AlertCircle}
+          title={t(($) => $.empty.load_error_title)}
+          description={
+            sourcesQuery.error instanceof Error
+              ? sourcesQuery.error.message
+              : t(($) => $.empty.load_error_fallback)
+          }
+        />
       ) : notConfigured && treeQuery.data === undefined ? (
         <CollectionPageState
           icon={Library}
@@ -527,6 +581,12 @@ export function KnowledgePage() {
               {t(($) => $.empty.open_repositories)}
             </Button>
           }
+        />
+      ) : repoUnknown ? (
+        <CollectionPageState
+          icon={Library}
+          title={t(($) => $.empty.unknown_source_title)}
+          description={t(($) => $.empty.unknown_source_description)}
         />
       ) : showTreeError ? (
         <CollectionPageState
@@ -599,8 +659,8 @@ export function KnowledgePage() {
                 </div>
               ) : (
                 <KnowledgeTree
-                  key={`${wsId}:${activeRef}`}
-                  wsId={wsId}
+                  key={`${scopeKey}:${activeRef}`}
+                  wsId={scopeKey}
                   filePaths={visibleFiles}
                   selectedPath={pathParam}
                   onSelect={selectPath}

@@ -16,6 +16,7 @@ import { useT } from "../i18n";
 
 type BranchPickerProps = {
   wsId: string;
+  repoUrl: string;
   // User's persisted choice; empty string means "no override".
   value: string;
   // Page-level handler: writes the new ref to the store and clears ?path=.
@@ -31,9 +32,9 @@ type BranchPickerProps = {
  * `value` falls back to the server's resolved default so the picker is
  * usable before branches have loaded.
  */
-export function BranchPicker({ wsId, value, onChange, disabled }: BranchPickerProps) {
+export function BranchPicker({ wsId, repoUrl, value, onChange, disabled }: BranchPickerProps) {
   const { t } = useT("knowledge");
-  const branchesQuery = useQuery(knowledgeBranchesOptions(wsId));
+  const branchesQuery = useQuery(knowledgeBranchesOptions(wsId, repoUrl));
 
   const defaultBranch = branchesQuery.data?.default_branch ?? "";
   const branches = useMemo(

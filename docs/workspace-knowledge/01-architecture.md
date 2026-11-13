@@ -63,6 +63,7 @@ Available in this workspace — `multica repo checkout <url> [--ref <branch-or-s
 - `packages/views/knowledge/`：目录树 + Markdown 预览（只读）  
 - Host 只加：侧栏槽位、`/{slug}/knowledge` 路由、`reserved_slugs.json` 增加 `knowledge`  
 - **所有人看到的都是 Git 远程默认分支**，不是某台电脑上的 clone  
+- 多个标成知识库的仓库在页面里切换，路径、分支和链接仍留在单个仓库内。都没标时，仍按说明里的「知识库 / knowledge」或唯一仓库识别一个  
 - 后端用 Git 托管 API（GitHub / Gitea / Forgejo）拉 tree 和文件，不在 Multica 里存文档副本  
 - 编辑权威仍在 Git（Agent/人走分支 + PR）
 

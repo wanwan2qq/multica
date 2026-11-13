@@ -463,9 +463,11 @@ import {
   // KB-HOOK: workspace knowledge base schemas
   KnowledgeBranchesResponseSchema,
   KnowledgeFileResponseSchema,
+  KnowledgeSourcesResponseSchema,
   KnowledgeTreeResponseSchema,
   EMPTY_KNOWLEDGE_BRANCHES,
   EMPTY_KNOWLEDGE_FILE,
+  EMPTY_KNOWLEDGE_SOURCES,
   EMPTY_KNOWLEDGE_TREE,
   IssueViewSchema,
   IssueViewListSchema,
@@ -501,7 +503,7 @@ import {
   type IssueViewPreference,
   type CreateIssueViewRequest,
 } from "./schemas";
-import type { KnowledgeBranchesResponse, KnowledgeFileResponse, KnowledgeTreeResponse } from "../knowledge";
+import type { KnowledgeBranchesResponse, KnowledgeFileResponse, KnowledgeSourcesResponse, KnowledgeTreeResponse } from "../knowledge";
 
 /** Identifies the calling client to the server.
  *  Sent on every HTTP request as X-Client-Platform / X-Client-Version /
@@ -778,6 +780,13 @@ function isReplayableBody(body: BodyInit | null | undefined): boolean {
   if (typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams)
     return true;
   return false;
+}
+
+function appendKnowledgeQuery(search: URLSearchParams, ref?: string, repoUrl?: string) {
+  const trimmedRef = ref?.trim();
+  if (trimmedRef) search.set("ref", trimmedRef);
+  const trimmedRepo = repoUrl?.trim();
+  if (trimmedRepo) search.set("repo", trimmedRepo);
 }
 
 export class ApiClient {
@@ -3076,10 +3085,16 @@ export class ApiClient {
     return this.fetch(`/api/workspaces/${id}`);
   }
 
-  async getKnowledgeTree(workspaceId: string, ref?: string): Promise<KnowledgeTreeResponse> {
+  async getKnowledgeSources(workspaceId: string): Promise<KnowledgeSourcesResponse> {
+    const raw = await this.fetch<unknown>(`/api/workspaces/${workspaceId}/knowledge/sources`);
+    return parseWithFallback(raw, KnowledgeSourcesResponseSchema, EMPTY_KNOWLEDGE_SOURCES, {
+      endpoint: "GET /api/workspaces/{id}/knowledge/sources",
+    });
+  }
+
+  async getKnowledgeTree(workspaceId: string, ref?: string, repoUrl?: string): Promise<KnowledgeTreeResponse> {
     const search = new URLSearchParams();
-    const trimmedRef = ref?.trim();
-    if (trimmedRef) search.set("ref", trimmedRef);
+    appendKnowledgeQuery(search, ref, repoUrl);
     const qs = search.toString();
     const url = `/api/workspaces/${workspaceId}/knowledge/tree${qs ? `?${qs}` : ""}`;
     const raw = await this.fetch<unknown>(url);
@@ -3088,10 +3103,9 @@ export class ApiClient {
     });
   }
 
-  async getKnowledgeFile(workspaceId: string, path: string, ref?: string): Promise<KnowledgeFileResponse> {
+  async getKnowledgeFile(workspaceId: string, path: string, ref?: string, repoUrl?: string): Promise<KnowledgeFileResponse> {
     const search = new URLSearchParams({ path });
-    const trimmedRef = ref?.trim();
-    if (trimmedRef) search.set("ref", trimmedRef);
+    appendKnowledgeQuery(search, ref, repoUrl);
     const raw = await this.fetch<unknown>(
       `/api/workspaces/${workspaceId}/knowledge/file?${search.toString()}`,
     );
@@ -3105,18 +3119,22 @@ export class ApiClient {
   // unrenderable, while this one returns the whole blob under an attachment
   // disposition. Returns the raw Blob — there is no JSON schema to parse, and
   // the caller owns turning it into a file.
-  async downloadKnowledgeFile(workspaceId: string, path: string, ref?: string): Promise<Blob> {
+  async downloadKnowledgeFile(workspaceId: string, path: string, ref?: string, repoUrl?: string): Promise<Blob> {
     const search = new URLSearchParams({ path });
-    const trimmedRef = ref?.trim();
-    if (trimmedRef) search.set("ref", trimmedRef);
+    appendKnowledgeQuery(search, ref, repoUrl);
     const res = await this.fetchRaw(
       `/api/workspaces/${workspaceId}/knowledge/download?${search.toString()}`,
     );
     return res.blob();
   }
 
-  async getKnowledgeBranches(workspaceId: string): Promise<KnowledgeBranchesResponse> {
-    const raw = await this.fetch<unknown>(`/api/workspaces/${workspaceId}/knowledge/branches`);
+  async getKnowledgeBranches(workspaceId: string, repoUrl?: string): Promise<KnowledgeBranchesResponse> {
+    const search = new URLSearchParams();
+    appendKnowledgeQuery(search, undefined, repoUrl);
+    const qs = search.toString();
+    const raw = await this.fetch<unknown>(
+      `/api/workspaces/${workspaceId}/knowledge/branches${qs ? `?${qs}` : ""}`,
+    );
     return parseWithFallback(raw, KnowledgeBranchesResponseSchema, EMPTY_KNOWLEDGE_BRANCHES, {
       endpoint: "GET /api/workspaces/{id}/knowledge/branches",
     });

@@ -177,6 +177,31 @@ describe("RepositoriesSection", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
+  it("marks a repository as a knowledge source", async () => {
+    const user = userEvent.setup();
+    render(<RepositoriesSection />, { wrapper: Wrapper });
+
+    await user.click(
+      screen.getByRole("button", { name: /Actions for https:\/\/github.com\/multica-ai\/multica/ }),
+    );
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit repository" });
+    await user.click(within(dialog).getByRole("checkbox", { name: "Knowledge base" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(mockUpdateWorkspace).toHaveBeenCalledWith("workspace-1", {
+        repos: [
+          {
+            url: "https://github.com/multica-ai/multica",
+            description: "Main app",
+            knowledge: true,
+          },
+        ],
+      });
+    });
+  });
+
   it("refuses a repository that is already listed under another URL form", async () => {
     const user = userEvent.setup();
     render(<RepositoriesSection />, { wrapper: Wrapper });

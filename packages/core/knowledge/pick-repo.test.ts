@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultKnowledgePath, pickKnowledgeRepo } from "./pick-repo";
+import { defaultKnowledgePath, knowledgeBrowseKey, knowledgeSourceLabel, pickKnowledgeRepo } from "./pick-repo";
 
 describe("pickKnowledgeRepo", () => {
   it("prefers a repo whose description mentions 知识库", () => {
@@ -30,6 +30,19 @@ describe("pickKnowledgeRepo", () => {
         { url: "https://git.example/b.git" },
       ]),
     ).toBeNull();
+  });
+});
+
+describe("knowledge source labels", () => {
+  it("prefers the description and otherwise the repository name", () => {
+    expect(knowledgeSourceLabel({ url: "https://git.example/kb.git", description: " 产品 " })).toBe("产品");
+    expect(knowledgeSourceLabel({ url: "git@git.example:team/docs.git" })).toBe("docs");
+  });
+
+  it("keeps the default source on the workspace key", () => {
+    expect(knowledgeBrowseKey("ws-1", "https://git.example/kb.git")).toBe(
+      "ws-1\nhttps://git.example/kb.git",
+    );
   });
 });
 

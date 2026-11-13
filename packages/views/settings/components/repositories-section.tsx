@@ -123,6 +123,7 @@ interface RepositoryDraft {
   index: number | null;
   url: string;
   description: string;
+  knowledge: boolean;
 }
 
 /**
@@ -287,6 +288,7 @@ export function RepositoriesSection() {
     const entry: WorkspaceRepo = {
       url: draft.url.trim(),
       ...(draft.description.trim() ? { description: draft.description.trim() } : {}),
+      ...(draft.knowledge ? { knowledge: true } : {}),
     };
     const next =
       draft.index === null
@@ -451,7 +453,9 @@ export function RepositoriesSection() {
                 </span>
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => setDraft({ index: null, url: "", description: "" })}
+                onClick={() =>
+                  setDraft({ index: null, url: "", description: "", knowledge: false })
+                }
               >
                 <Pencil />
                 {t(($) => $.repositories.add_manually)}
@@ -497,6 +501,9 @@ export function RepositoriesSection() {
                     </p>
                   ) : null}
                 </div>
+                {repository.knowledge ? (
+                  <Badge variant="secondary">{t(($) => $.repositories.knowledge_badge)}</Badge>
+                ) : null}
                 {canManageWorkspace ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger
@@ -519,6 +526,7 @@ export function RepositoriesSection() {
                             index,
                             url: repository.url,
                             description: repository.description ?? "",
+                            knowledge: repository.knowledge === true,
                           })
                         }
                       >
@@ -600,6 +608,23 @@ export function RepositoriesSection() {
                 }
                 placeholder={t(($) => $.repositories.description_placeholder)}
               />
+            </div>
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2" htmlFor="repository-knowledge">
+                <Checkbox
+                  id="repository-knowledge"
+                  checked={draft?.knowledge === true}
+                  onCheckedChange={(checked) =>
+                    setDraft((current) =>
+                      current ? { ...current, knowledge: checked === true } : current,
+                    )
+                  }
+                />
+                <span className="text-body">{t(($) => $.repositories.knowledge_label)}</span>
+              </label>
+              <p className="text-caption text-muted-foreground">
+                {t(($) => $.repositories.knowledge_hint)}
+              </p>
             </div>
             <DialogFooter>
               <Button

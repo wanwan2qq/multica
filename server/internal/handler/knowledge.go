@@ -68,6 +68,44 @@ func pickKnowledgeRepo(repos []workspaceRepoRef) (workspaceRepoRef, bool) {
 	return workspaceRepoRef{}, false
 }
 
+// knowledgeSources is the ordered list the browser can open. Explicit
+// knowledge flags win as a set. With none set, the legacy single-repo pick
+// stays the whole list, so a workspace that already has one tagged repo does
+// not change until someone opts more in.
+func knowledgeSources(repos []workspaceRepoRef) []workspaceRepoRef {
+	explicit := make([]workspaceRepoRef, 0)
+	for _, repo := range repos {
+		if repo.Knowledge {
+			explicit = append(explicit, repo)
+		}
+	}
+	if len(explicit) > 0 {
+		return explicit
+	}
+	if repo, ok := pickKnowledgeRepo(repos); ok {
+		return []workspaceRepoRef{repo}
+	}
+	return nil
+}
+
+// selectKnowledgeSource picks one source. An empty request uses the first
+// (the default). kind is "", "missing", or "unknown".
+func selectKnowledgeSource(sources []workspaceRepoRef, requested string) (workspaceRepoRef, string) {
+	requested = strings.TrimSpace(requested)
+	if len(sources) == 0 {
+		return workspaceRepoRef{}, "missing"
+	}
+	if requested == "" {
+		return sources[0], ""
+	}
+	for _, repo := range sources {
+		if repo.URL == requested {
+			return repo, ""
+		}
+	}
+	return workspaceRepoRef{}, "unknown"
+}
+
 func isKnowledgeDescription(description string) bool {
 	lower := strings.ToLower(description)
 	return strings.Contains(description, "知识库") || strings.Contains(lower, "knowledge")
@@ -78,37 +116,95 @@ func (h *Handler) loadKnowledgeRepo(w http.ResponseWriter, r *http.Request) (pgt
 	if !ok {
 		return pgtype.UUID{}, workspaceRepoRef{}, gitRemote{}, "", false
 	}
-	repo, remote, token, ok := h.loadKnowledgeRepoForWorkspace(r.Context(), w, workspaceID)
+	repo, remote, token, ok := h.loadKnowledgeRepoForWorkspace(r.Context(), w, workspaceID, r.URL.Query().Get("repo"), false)
 	return workspaceID, repo, remote, token, ok
 }
 
-// loadKnowledgeRepoForWorkspace resolves the knowledge repository of one
-// workspace. The capability route calls it after its own authorization, so it
-// takes the ID directly instead of re-reading the URL.
-func (h *Handler) loadKnowledgeRepoForWorkspace(ctx context.Context, w http.ResponseWriter, workspaceID pgtype.UUID) (workspaceRepoRef, gitRemote, string, bool) {
-	ws, err := h.Queries.GetWorkspace(ctx, workspaceID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "workspace not found")
+// loadKnowledgeRepoForWorkspace resolves one knowledge repository of a
+// workspace. requested is the repo query (or the asset token's repo); empty
+// selects the default source. public routes answer missing and unknown with
+// 404 — the capability URL must not describe the workspace's configuration.
+func (h *Handler) loadKnowledgeRepoForWorkspace(ctx context.Context, w http.ResponseWriter, workspaceID pgtype.UUID, requested string, public bool) (workspaceRepoRef, gitRemote, string, bool) {
+	repos, token, ok := h.readWorkspaceRepos(ctx, w, workspaceID, public)
+	if !ok {
 		return workspaceRepoRef{}, gitRemote{}, "", false
 	}
-	var repos []workspaceRepoRef
-	if len(ws.Repos) > 0 {
-		if err := json.Unmarshal(ws.Repos, &repos); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to read workspace repositories")
-			return workspaceRepoRef{}, gitRemote{}, "", false
+	repo, kind := selectKnowledgeSource(knowledgeSources(repos), requested)
+	if kind != "" {
+		if public {
+			writeError(w, http.StatusNotFound, "not found")
+		} else if kind == "unknown" {
+			writeErrorCode(w, http.StatusBadRequest, "knowledge_repo_unknown", "repository is not a knowledge source")
+		} else {
+			writeErrorCode(w, http.StatusNotFound, "knowledge_repo_not_configured", "no knowledge repository configured; mark a workspace repo as a knowledge source, or add one whose description contains 知识库 or knowledge")
 		}
-	}
-	repo, ok := pickKnowledgeRepo(repos)
-	if !ok {
-		writeErrorCode(w, http.StatusNotFound, "knowledge_repo_not_configured", "no knowledge repository configured; add a workspace repo whose description contains 知识库 or knowledge")
 		return workspaceRepoRef{}, gitRemote{}, "", false
 	}
 	remote, err := parseGitRemote(repo.URL)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		if public {
+			writeError(w, http.StatusNotFound, "not found")
+		} else {
+			writeError(w, http.StatusBadRequest, err.Error())
+		}
 		return workspaceRepoRef{}, gitRemote{}, "", false
 	}
-	return repo, remote, knowledgeGitTokenFromSettings(ws.Settings), true
+	return repo, remote, token, true
+}
+
+// readWorkspaceRepos loads the workspace repository list. The token is the
+// browse credential, never a repository URL.
+func (h *Handler) readWorkspaceRepos(ctx context.Context, w http.ResponseWriter, workspaceID pgtype.UUID, public bool) ([]workspaceRepoRef, string, bool) {
+	ws, err := h.Queries.GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		if public {
+			writeError(w, http.StatusNotFound, "not found")
+		} else {
+			writeError(w, http.StatusNotFound, "workspace not found")
+		}
+		return nil, "", false
+	}
+	var repos []workspaceRepoRef
+	if len(ws.Repos) > 0 {
+		if err := json.Unmarshal(ws.Repos, &repos); err != nil {
+			if public {
+				writeError(w, http.StatusNotFound, "not found")
+			} else {
+				writeError(w, http.StatusInternalServerError, "failed to read workspace repositories")
+			}
+			return nil, "", false
+		}
+	}
+	return repos, knowledgeGitTokenFromSettings(ws.Settings), true
+}
+
+type knowledgeSourceResponse struct {
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
+}
+
+type knowledgeSourcesResponse struct {
+	Sources []knowledgeSourceResponse `json:"sources"`
+}
+
+func (h *Handler) GetKnowledgeSources(w http.ResponseWriter, r *http.Request) {
+	workspaceID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "id"), "workspace_id")
+	if !ok {
+		return
+	}
+	repos, _, ok := h.readWorkspaceRepos(r.Context(), w, workspaceID, false)
+	if !ok {
+		return
+	}
+	sources := knowledgeSources(repos)
+	out := make([]knowledgeSourceResponse, 0, len(sources))
+	for _, source := range sources {
+		out = append(out, knowledgeSourceResponse{
+			URL:         source.URL,
+			Description: source.Description,
+		})
+	}
+	writeJSON(w, http.StatusOK, knowledgeSourcesResponse{Sources: out})
 }
 
 func (h *Handler) GetKnowledgeTree(w http.ResponseWriter, r *http.Request) {
@@ -247,7 +343,7 @@ func knowledgeDownloadContentType(filePath string) string {
 }
 
 func (h *Handler) GetKnowledgeFile(w http.ResponseWriter, r *http.Request) {
-	workspaceID, _, remote, token, ok := h.loadKnowledgeRepo(w, r)
+	workspaceID, repo, remote, token, ok := h.loadKnowledgeRepo(w, r)
 	if !ok {
 		return
 	}
@@ -286,7 +382,7 @@ func (h *Handler) GetKnowledgeFile(w http.ResponseWriter, r *http.Request) {
 		Truncated:  truncated,
 		Size:       len(body),
 		Content:    content,
-		AssetsBase: knowledgeAssetsBasePath(util.UUIDToString(workspaceID), ref, time.Now()),
+		AssetsBase: knowledgeAssetsBasePath(util.UUIDToString(workspaceID), ref, repo.URL, time.Now()),
 	})
 }
 

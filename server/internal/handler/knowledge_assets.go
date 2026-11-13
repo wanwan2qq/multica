@@ -26,7 +26,7 @@ const (
 	// working. The file response is fetched once per open document and TanStack
 	// Query keeps it for the page's lifetime, so a short-lived capability would
 	// break every image in a tab left open past the TTL. The grant itself is
-	// only "read this workspace's knowledge repo on one ref", which every
+	// only "read one knowledge source of this workspace on one ref", which every
 	// workspace member can already do while their session lasts.
 	knowledgeAssetTTL = 12 * time.Hour
 
@@ -52,7 +52,10 @@ type knowledgeAssetClaims struct {
 	Version   int    `json:"v"`
 	Workspace string `json:"ws"`
 	Ref       string `json:"ref"`
-	Exp       int64  `json:"exp"`
+	// Repo is the knowledge source URL. Empty tokens (minted before sources
+	// were selectable) resolve to the workspace's default source.
+	Repo string `json:"repo,omitempty"`
+	Exp  int64  `json:"exp"`
 }
 
 func knowledgeAssetSigningKey() []byte {
@@ -72,11 +75,12 @@ func knowledgeAssetSignature(payload string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-func mintKnowledgeAssetToken(workspaceID, ref string, now time.Time) string {
+func mintKnowledgeAssetToken(workspaceID, ref, repo string, now time.Time) string {
 	payload, err := json.Marshal(knowledgeAssetClaims{
 		Version:   1,
 		Workspace: workspaceID,
 		Ref:       ref,
+		Repo:      repo,
 		Exp:       now.Add(knowledgeAssetTTL).Unix(),
 	})
 	if err != nil {
@@ -124,8 +128,8 @@ func verifyKnowledgeAssetToken(token string, now time.Time) (knowledgeAssetClaim
 // document's sibling assets against. Clients prefix it with their API base, so
 // web deployments that proxy /api stay same-origin and desktop clients get an
 // absolute URL.
-func knowledgeAssetsBasePath(workspaceID, ref string, now time.Time) string {
-	token := mintKnowledgeAssetToken(workspaceID, ref, now)
+func knowledgeAssetsBasePath(workspaceID, ref, repo string, now time.Time) string {
+	token := mintKnowledgeAssetToken(workspaceID, ref, repo, now)
 	if token == "" {
 		return ""
 	}
@@ -164,7 +168,7 @@ func (h *Handler) ServeKnowledgeAsset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	_, remote, token, ok := h.loadKnowledgeRepoForWorkspace(r.Context(), w, routeID)
+	_, remote, token, ok := h.loadKnowledgeRepoForWorkspace(r.Context(), w, routeID, claims.Repo, true)
 	if !ok {
 		return
 	}

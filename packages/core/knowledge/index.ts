@@ -13,6 +13,15 @@ export type KnowledgeTreeResponse = {
   entries: KnowledgeTreeEntry[];
 };
 
+export type KnowledgeSource = {
+  url: string;
+  description: string;
+};
+
+export type KnowledgeSourcesResponse = {
+  sources: KnowledgeSource[];
+};
+
 export type KnowledgeBranchesResponse = {
   branches: string[];
   default_branch: string;
@@ -36,6 +45,8 @@ export type KnowledgeFileResponse = {
 export {
   defaultKnowledgePath,
   isKnowledgeDescription,
+  knowledgeBrowseKey,
+  knowledgeSourceLabel,
   pickKnowledgeRepo,
 } from "./pick-repo";
 export {

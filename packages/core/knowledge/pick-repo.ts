@@ -20,6 +20,25 @@ export function isKnowledgeDescription(description: string | undefined): boolean
   return text.includes("知识库") || text.includes("knowledge");
 }
 
+/**
+ * Local browse state for the default knowledge source stays keyed by workspace
+ * id, so a workspace that already remembered a branch or file keeps it. Every
+ * other source gets its own key.
+ */
+export function knowledgeBrowseKey(wsId: string, repoUrl: string): string {
+  return `${wsId}\n${repoUrl}`;
+}
+
+/** Switcher label: the description, otherwise the repository name. */
+export function knowledgeSourceLabel(source: { url: string; description?: string }): string {
+  const description = source.description?.trim();
+  if (description) return description;
+  const trimmed = source.url.trim().replace(/\.git$/i, "").replace(/\/+$/, "");
+  const cut = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf(":"));
+  const name = cut >= 0 ? trimmed.slice(cut + 1) : trimmed;
+  return name || source.url;
+}
+
 export function defaultKnowledgePath(paths: string[]): string | null {
   const markdown = paths.filter((path) => /\.(md|markdown)$/i.test(path));
   const overviews = markdown.filter((path) => /(^|\/)_overview\.md$/i.test(path));

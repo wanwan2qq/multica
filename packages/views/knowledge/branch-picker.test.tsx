@@ -37,7 +37,7 @@ function renderPicker(
   return render(
     <I18nProvider locale="en" resources={TEST_RESOURCES}>
       <QueryClientProvider client={client}>
-        <BranchPicker wsId={wsId} value={value} onChange={onChange} />
+        <BranchPicker wsId={wsId} repoUrl="https://git.example/kb.git" value={value} onChange={onChange} />
       </QueryClientProvider>
     </I18nProvider>,
   );

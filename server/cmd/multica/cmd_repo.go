@@ -69,6 +69,7 @@ func init() {
 
 	repoAddCmd.Flags().StringArray("url", nil, "Repository URL to add (may be repeated)")
 	repoAddCmd.Flags().String("description", "", "Optional description; only valid when adding one URL")
+	repoAddCmd.Flags().Bool("knowledge", false, "Mark the repository as a knowledge source; only valid when adding one URL")
 	repoAddCmd.Flags().String("output", "json", "Output format: table or json")
 
 	repoRemoveCmd.Flags().StringArray("url", nil, "Repository URL to remove (may be repeated)")
@@ -86,6 +87,7 @@ func init() {
 type workspaceRepo struct {
 	URL         string `json:"url"`
 	Description string `json:"description,omitempty"`
+	Knowledge   bool   `json:"knowledge,omitempty"`
 }
 
 type repoWorkspaceResponse struct {
@@ -185,9 +187,13 @@ func runRepoList(cmd *cobra.Command, _ []string) error {
 	}
 	rows := make([][]string, 0, len(ws.Repos))
 	for _, repo := range ws.Repos {
-		rows = append(rows, []string{repo.URL, repo.Description})
+		knowledge := ""
+		if repo.Knowledge {
+			knowledge = "yes"
+		}
+		rows = append(rows, []string{repo.URL, repo.Description, knowledge})
 	}
-	cli.PrintTable(os.Stdout, []string{"URL", "DESCRIPTION"}, rows)
+	cli.PrintTable(os.Stdout, []string{"URL", "DESCRIPTION", "KNOWLEDGE"}, rows)
 	return nil
 }
 
@@ -198,8 +204,13 @@ func runRepoAdd(cmd *cobra.Command, args []string) error {
 	}
 	description, _ := cmd.Flags().GetString("description")
 	descriptionChanged := cmd.Flags().Changed("description")
-	if descriptionChanged && len(urls) > 1 {
-		return fmt.Errorf("--description can only be used when adding one repository URL")
+	knowledge, err := cmd.Flags().GetBool("knowledge")
+	if err != nil {
+		return err
+	}
+	knowledgeChanged := cmd.Flags().Changed("knowledge")
+	if len(urls) > 1 && (descriptionChanged || knowledgeChanged) {
+		return fmt.Errorf("--description and --knowledge can only be used when adding one repository URL")
 	}
 
 	client, workspaceID, err := repoCommandClient(cmd)
@@ -225,8 +236,16 @@ func runRepoAdd(cmd *cobra.Command, args []string) error {
 	repos := append([]workspaceRepo{}, ws.Repos...)
 	for _, u := range urls {
 		if idx, ok := indexByURL[u]; ok {
+			changed := false
 			if descriptionChanged && repos[idx].Description != description {
 				repos[idx].Description = description
+				changed = true
+			}
+			if knowledgeChanged && repos[idx].Knowledge != knowledge {
+				repos[idx].Knowledge = knowledge
+				changed = true
+			}
+			if changed {
 				updated = append(updated, repos[idx])
 			}
 			continue
@@ -234,6 +253,9 @@ func runRepoAdd(cmd *cobra.Command, args []string) error {
 		repo := workspaceRepo{URL: u}
 		if descriptionChanged {
 			repo.Description = description
+		}
+		if knowledgeChanged {
+			repo.Knowledge = knowledge
 		}
 		indexByURL[u] = len(repos)
 		repos = append(repos, repo)

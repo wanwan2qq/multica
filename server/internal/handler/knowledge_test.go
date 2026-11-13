@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
@@ -30,6 +31,65 @@ func TestPickKnowledgeRepo(t *testing.T) {
 		{URL: "https://git.example/b.git"},
 	}); ok {
 		t.Fatal("expected no pick when multiple untagged repos")
+	}
+}
+
+func TestKnowledgeSources(t *testing.T) {
+	explicit := knowledgeSources([]workspaceRepoRef{
+		{URL: "https://git.example/code.git", Description: "team knowledge base"},
+		{URL: "https://git.example/kb-a.git", Knowledge: true},
+		{URL: "https://git.example/kb-b.git", Knowledge: true, Description: "产品"},
+	})
+	if len(explicit) != 2 || explicit[0].URL != "https://git.example/kb-a.git" || explicit[1].URL != "https://git.example/kb-b.git" {
+		t.Fatalf("explicit flags should win in order, got %+v", explicit)
+	}
+	primary, kind := selectKnowledgeSource(explicit, "")
+	if kind != "" || primary.URL != "https://git.example/kb-a.git" {
+		t.Fatalf("default source = %+v kind=%q", primary, kind)
+	}
+	picked, kind := selectKnowledgeSource(explicit, "https://git.example/kb-b.git")
+	if kind != "" || picked.URL != "https://git.example/kb-b.git" {
+		t.Fatalf("selected source = %+v kind=%q", picked, kind)
+	}
+	if _, kind = selectKnowledgeSource(explicit, "https://git.example/code.git"); kind != "unknown" {
+		t.Fatalf("unlisted repo kind = %q, want unknown", kind)
+	}
+
+	legacy := knowledgeSources([]workspaceRepoRef{
+		{URL: "https://git.example/code.git"},
+		{URL: "https://git.example/kb.git", Description: "工作区知识库"},
+	})
+	if len(legacy) != 1 || legacy[0].URL != "https://git.example/kb.git" {
+		t.Fatalf("legacy description pick = %+v", legacy)
+	}
+	if sources := knowledgeSources([]workspaceRepoRef{
+		{URL: "https://git.example/a.git"},
+		{URL: "https://git.example/b.git"},
+	}); sources != nil {
+		t.Fatalf("untagged repos = %+v, want none", sources)
+	}
+	if _, kind = selectKnowledgeSource(nil, ""); kind != "missing" {
+		t.Fatalf("empty list kind = %q, want missing", kind)
+	}
+}
+
+func TestValidateWorkspaceReposPreservesKnowledge(t *testing.T) {
+	raw, err := validateAndNormalizeWorkspaceRepos([]map[string]any{
+		{"url": " https://git.example/kb.git ", "description": " 产品 ", "knowledge": true},
+		{"url": "https://git.example/code.git", "knowledge": false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var repos []workspaceRepoRef
+	if err := json.Unmarshal(raw, &repos); err != nil {
+		t.Fatal(err)
+	}
+	if len(repos) != 2 || !repos[0].Knowledge || repos[0].URL != "https://git.example/kb.git" || repos[0].Description != "产品" {
+		t.Fatalf("first repo = %+v", repos)
+	}
+	if repos[1].Knowledge {
+		t.Fatalf("second repo kept a false knowledge flag: %+v", repos[1])
 	}
 }
 

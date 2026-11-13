@@ -3,6 +3,8 @@ export type MemberRole = "owner" | "admin" | "member";
 export interface WorkspaceRepo {
   url: string;
   description?: string;
+  /** When true, the knowledge page can browse this repository. */
+  knowledge?: boolean;
 }
 
 export interface Workspace {

@@ -11,9 +11,10 @@
 ### 步骤
 
 1. **确认知识库 Git 远程 URL**（内网 Git / GitHub / Gitea 等），以及跑 Agent 的机器已经 `git clone` / `git fetch` 成功。  
-2. 打开 Multica 工作区 → **设置 → 代码仓库** → 添加该 URL。  
+2. 打开 Multica 工作区 → **设置 → 代码仓库** → 添加该 URL，并打开「用作知识库」。多个知识库按列表顺序排列，第一个是默认来源。  
    - description：`工作区知识库。入口 01-贝易转/_overview.md。写入走独立分支+PR。`  
-   - CLI 等价：`multica repo add <url> --description "..."`  
+   - CLI 等价：`multica repo add <url> --description "..." --knowledge`  
+   - 没有任何仓库打开「用作知识库」时，仍按说明里的「知识库 / knowledge」或唯一仓库识别，且只认一个。  
 3. **设置 → 工作区** → `workspace.context` 写入指针（见 `03-agent-read-write.md`）。  
 4. 创建工作区 Skill `workspace-knowledge`，内容用 `05-skill.md`。  
 5. 将该 Skill 绑定到 PRD / DEV / TEST（及 PMO）Agent。  
